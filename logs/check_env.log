@@ -1,0 +1,10 @@
+python version: 3.10.20
+python executable: /Users/luoyi/Desktop/shortvideo_mmgcn_poc/.venv/bin/python
+platform: macOS-26.2-arm64-arm-64bit
+machine: arm64
+torch version: 2.12.0
+cuda available: False
+gpu name: none
+gpu memory: 0 GiB
+mps available: True
+torch_geometric version: 2.7.0

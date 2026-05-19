@@ -1,0 +1,160 @@
+19 May 22:46    INFO ██Server: 	luoyidebijixingdiannao.local
+19 May 22:46    INFO ██Dir: 	/Users/luoyi/Desktop/shortvideo_mmgcn_poc/MMRec/src
+
+19 May 22:46    INFO 
+gpu_id=0
+use_gpu=False
+seed=[999]
+data_path=../data/
+inter_splitting_label=x_label
+filter_out_cod_start_users=True
+is_multimodal_model=True
+checkpoint_dir=saved
+save_recommended_topk=False
+recommend_topk=recommend_topk/
+embedding_size=64
+weight_decay=0.0
+req_training=True
+epochs=1
+stopping_step=5
+train_batch_size=2048
+learner=adam
+learning_rate=0.001
+learning_rate_scheduler=[1.0, 50]
+eval_step=1
+training_neg_sample_num=1
+use_neg_sampling=True
+use_full_sampling=False
+NEG_PREFIX=neg__
+USER_ID_FIELD=userID
+ITEM_ID_FIELD=itemID
+TIME_FIELD=timestamp
+field_separator=	
+metrics=['Recall', 'NDCG']
+topk=[10, 20]
+valid_metric=NDCG@10
+eval_batch_size=256
+use_raw_features=False
+max_txt_len=32
+max_img_size=256
+vocab_size=30522
+type_vocab_size=2
+hidden_size=4
+pad_token_id=0
+max_position_embeddings=512
+layer_norm_eps=1e-12
+hidden_dropout_prob=0.1
+end2end=False
+hyper_parameters=['seed']
+inter_file_name=video.inter
+vision_feature_file=image_feat.npy
+text_feature_file=text_feat.npy
+clip_grad_norm=None
+eval_type=full
+use_neighborhood_loss=False
+alpha1=0.0
+alpha2=0.0
+beta=1
+n_layers=1
+reg_weight=1e-05
+model=MMGCN
+dataset=video
+valid_metric_bigger=True
+device=cpu
+
+
+19 May 22:46    INFO video
+The number of users: 69
+Average actions of users: 43.95652173913044
+The number of items: 2822
+Average actions of items: 1.0747696669029057
+The number of inters: 3033
+The sparsity of the dataset: 98.44236280159%
+19 May 22:46    INFO 
+====Training====
+video
+The number of users: 69
+Average actions of users: 35.53623188405797
+The number of items: 2312
+Average actions of items: 1.060553633217993
+The number of inters: 2452
+The sparsity of the dataset: 98.46296574895943%
+19 May 22:46    INFO 
+====Validation====
+video
+The number of users: 69
+Average actions of users: 4.0
+The number of items: 275
+Average actions of items: 1.0036363636363637
+The number of inters: 276
+The sparsity of the dataset: 98.54545454545455%
+19 May 22:46    INFO 
+====Testing====
+video
+The number of users: 69
+Average actions of users: 4.420289855072464
+The number of items: 303
+Average actions of items: 1.0066006600660067
+The number of inters: 305
+The sparsity of the dataset: 98.54115846367245%
+19 May 22:46    INFO 
+
+=================================
+
+
+19 May 22:46    INFO =========1/1: Parameters:['seed']=(999,)=======
+19 May 22:46    INFO MMGCN(
+  (v_gcn): GCN(
+    (MLP): Linear(in_features=768, out_features=256, bias=True)
+    (conv_embed_1): BaseModel(256, 256)
+    (linear_layer1): Linear(in_features=256, out_features=64, bias=True)
+    (g_layer1): Linear(in_features=320, out_features=64, bias=True)
+    (conv_embed_2): BaseModel(64, 64)
+    (linear_layer2): Linear(in_features=64, out_features=64, bias=True)
+    (g_layer2): Linear(in_features=128, out_features=64, bias=True)
+    (conv_embed_3): BaseModel(64, 64)
+    (linear_layer3): Linear(in_features=64, out_features=64, bias=True)
+    (g_layer3): Linear(in_features=128, out_features=64, bias=True)
+  )
+  (t_gcn): GCN(
+    (conv_embed_1): BaseModel(50, 50)
+    (linear_layer1): Linear(in_features=50, out_features=64, bias=True)
+    (g_layer1): Linear(in_features=114, out_features=64, bias=True)
+    (conv_embed_2): BaseModel(64, 64)
+    (linear_layer2): Linear(in_features=64, out_features=64, bias=True)
+    (g_layer2): Linear(in_features=128, out_features=64, bias=True)
+    (conv_embed_3): BaseModel(64, 64)
+    (linear_layer3): Linear(in_features=64, out_features=64, bias=True)
+    (g_layer3): Linear(in_features=128, out_features=64, bias=True)
+  )
+)
+Trainable parameters: 378564
+19 May 22:46    INFO epoch 0 training [time: 0.67s, train loss: 1.3863]
+19 May 22:46    INFO epoch 0 evaluating [time: 0.02s, valid_score: 0.000000]
+19 May 22:46    INFO valid result: 
+recall@10: 0.0000    recall@20: 0.0048    ndcg@10: 0.0000    ndcg@20: 0.0018    
+19 May 22:46    INFO test result: 
+recall@10: 0.0000    recall@20: 0.0000    ndcg@10: 0.0000    ndcg@20: 0.0000    
+19 May 22:46    INFO ██ MMGCN--Best validation results updated!!!
+19 May 22:46    INFO best valid result: recall@10: 0.0000    recall@20: 0.0048    ndcg@10: 0.0000    ndcg@20: 0.0018    
+19 May 22:46    INFO test result: recall@10: 0.0000    recall@20: 0.0000    ndcg@10: 0.0000    ndcg@20: 0.0000    
+19 May 22:46    INFO ████Current BEST████:
+Parameters: ['seed']=(999,),
+Valid: recall@10: 0.0000    recall@20: 0.0048    ndcg@10: 0.0000    ndcg@20: 0.0018    ,
+Test: recall@10: 0.0000    recall@20: 0.0000    ndcg@10: 0.0000    ndcg@20: 0.0000    
+
+
+
+19 May 22:46    INFO 
+============All Over=====================
+19 May 22:46    INFO Parameters: ['seed']=(999,),
+ best valid: recall@10: 0.0000    recall@20: 0.0048    ndcg@10: 0.0000    ndcg@20: 0.0018    ,
+ best test: recall@10: 0.0000    recall@20: 0.0000    ndcg@10: 0.0000    ndcg@20: 0.0000    
+19 May 22:46    INFO 
+
+█████████████ BEST ████████████████
+19 May 22:46    INFO 	Parameters: ['seed']=(999,),
+Valid: recall@10: 0.0000    recall@20: 0.0048    ndcg@10: 0.0000    ndcg@20: 0.0018    ,
+Test: recall@10: 0.0000    recall@20: 0.0000    ndcg@10: 0.0000    ndcg@20: 0.0000    
+
+

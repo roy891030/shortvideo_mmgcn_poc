@@ -1,0 +1,14 @@
+data_dir: /Users/luoyi/Desktop/shortvideo_mmgcn_poc/MMRec/data/video
+num_users: 69
+num_items: 2822
+num_interactions: 3033
+sparsity: 0.98442363
+train_count: 2452
+valid_count: 276
+test_count: 305
+user_id_range: 0..68
+item_id_range: 0..2821
+visual feature shape: (2822, 768)
+visual feature dtype: float32
+text feature shape: (2822, 50)
+text feature dtype: float32

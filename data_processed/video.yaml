@@ -1,0 +1,30 @@
+# ShortVideo processed recommendation smoke-test subset.
+USER_ID_FIELD: userID
+ITEM_ID_FIELD: itemID
+TIME_FIELD: timestamp
+inter_splitting_label: x_label
+filter_out_cod_start_users: True
+
+inter_file_name: video.inter
+vision_feature_file: image_feat.npy
+text_feature_file: text_feat.npy
+
+field_separator: "\t"
+
+use_gpu: False
+epochs: 1
+stopping_step: 5
+train_batch_size: 2048
+eval_batch_size: 256
+embedding_size: 64
+topk: [10, 20]
+metrics: ["Recall", "NDCG"]
+valid_metric: NDCG@10
+eval_step: 1
+save_recommended_topk: False
+clip_grad_norm:
+eval_type: full
+use_neighborhood_loss: False
+alpha1: 0.0
+alpha2: 0.0
+beta: 1

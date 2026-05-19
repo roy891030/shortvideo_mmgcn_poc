@@ -1,0 +1,11 @@
+source interactions: 294355
+selected users: 69
+selected items: 2822
+selected interactions: 3033
+split counts: {0: 2452, 1: 276, 2: 305}
+image feature shape: (2822, 768)
+text feature shape: (2822, 50)
+sparsity: 0.98442363
+wrote: /Users/luoyi/Desktop/shortvideo_mmgcn_poc/data_processed/video
+wrote: /Users/luoyi/Desktop/shortvideo_mmgcn_poc/MMRec/data/video
+wrote: /Users/luoyi/Desktop/shortvideo_mmgcn_poc/MMRec/src/configs/dataset/video.yaml

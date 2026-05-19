@@ -1,0 +1,19 @@
+.DS_Store
+.python310/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Large/reproducible data artifacts.
+data_raw/video-rec-dataset.zip
+data_raw/video_rec_dataset/
+data_processed/video/*.npy
+MMRec/data/video/*.npy
+MMRec/saved/
+MMRec/src/saved/
+
+# Nested repo internals are kept as cloned dependencies.
+MMRec/
+ShortVideo_dataset/
+MMRec/.git/
+ShortVideo_dataset/.git/

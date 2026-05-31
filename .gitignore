@@ -10,10 +10,16 @@ data_raw/video-rec-dataset.zip
 data_raw/video_rec_dataset/
 data_raw/shortvideo_tiny/interaction.csv
 data_processed/behavior/X.npy
+data_processed/behavior/Y.npy
+data_processed/behavior/weights.npy
 data_processed/video/*.npy
 MMRec/data/video/*.npy
 MMRec/saved/
 MMRec/src/saved/
+
+# Pipeline C 大型可重建產物（重跑腳本即可重建）
+data_processed/behavior/hetero_graph.pt
+data_processed/behavior/models_gnn/best_model.pt
 
 # Nested repo internals are kept as cloned dependencies.
 MMRec/

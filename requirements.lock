@@ -44,3 +44,6 @@ tzdata==2026.2
 urllib3==2.7.0
 xxhash==3.7.0
 yarl==1.23.0
+faiss-cpu==1.14.2
+opencv-python==4.13.0.92
+sentence-transformers==5.5.1

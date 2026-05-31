@@ -8,7 +8,7 @@
 ## 目錄
 
 1. [這個專案在解決什麼問題？](#1-這個專案在解決什麼問題)
-2. [兩個平行的研究方向](#2-兩個平行的研究方向)
+2. [三個平行的研究方向](#2-三個平行的研究方向)
 3. [背後的理論：推薦系統怎麼運作？](#3-背後的理論推薦系統怎麼運作)
 4. [背後的理論：圖神經網路（GNN）是什麼？](#4-背後的理論圖神經網路gnn是什麼)
 5. [資料集完整介紹](#5-資料集完整介紹)
@@ -16,9 +16,10 @@
 7. [環境設定](#7-環境設定)
 8. [Pipeline A：推薦系統（MMGCN）](#8-pipeline-a推薦系統mmgcn)
 9. [Pipeline B：行為預測（LightGBM）](#9-pipeline-b行為預測lightgbm)
-10. [目前實驗結果與解讀](#10-目前實驗結果與解讀)
-11. [遇到的技術問題與解法](#11-遇到的技術問題與解法)
-12. [下一步計畫](#12-下一步計畫)
+10. [Pipeline C：異質圖 GNN 影片表現預測](#10-pipeline-c異質圖-gnn-影片表現預測)
+11. [目前實驗結果與解讀](#11-目前實驗結果與解讀)
+12. [遇到的技術問題與解法](#12-遇到的技術問題與解法)
+13. [下一步計畫](#13-下一步計畫)
 
 ---
 
@@ -53,9 +54,9 @@
 
 ---
 
-## 2. 兩個平行的研究方向
+## 2. 三個平行的研究方向
 
-這個專案同時探索兩個不同的問題，可以獨立理解：
+這個專案同時探索三個不同的問題，可以獨立理解：
 
 ```
 這個專案
@@ -65,16 +66,32 @@
 │   輸入：使用者歷史行為 + 影片視覺/文字特徵
 │   輸出：對每個使用者，預測他最可能互動的影片排名
 │
-└── Pipeline B：行為預測
-    問題：「這部影片在平台上會引發多少互動？」
-    方法：LightGBM（梯度提升樹）
-    輸入：影片的視覺特徵 + 文字特徵
-    輸出：8 個行為指標（按讚率、留言率、觀看秒數...）
+├── Pipeline B：行為預測
+│   問題：「這部影片在平台上會引發多少互動？」
+│   方法：LightGBM（梯度提升樹）
+│   輸入：影片的視覺特徵 + 文字特徵
+│   輸出：8 個行為指標（按讚率、留言率、觀看秒數...）
+│
+└── Pipeline C：影片表現預測（異質圖 GNN）
+    問題：「全新的影片，在平台上表現會如何？（冷啟動）」
+    方法：HeteroGNN（異質圖神經網路，以影片為中心）
+    輸入：影片內容 + 作者背景 + 同分類/相似影片的圖結構
+    輸出：8 個行為指標（與 B 相同，但能處理零互動的新影片）
 ```
 
-**兩者的差別**：
-- Pipeline A 預測「哪個 **使用者** 喜歡這部影片」——需要使用者的個人資訊
-- Pipeline B 預測「這部影片在 **整個平台** 上會有多少互動」——只需要影片本身
+**三者的核心差別**：
+
+| | Pipeline A | Pipeline B | Pipeline C |
+|---|---|---|---|
+| **預測對象** | 特定使用者的偏好 | 影片的平台均值 | 影片的平台均值 |
+| **有無 user 節點** | ✓ 有 | ✗ 無 | ✗ 無 |
+| **能否冷啟動** | ✗ 不行 | △ 勉強 | ✓ 主要目標 |
+| **能否利用圖結構** | ✓ 二部圖 | ✗ 不能 | ✓ 異質圖 |
+| **模型類型** | 協同過濾式 GNN | 梯度提升樹 | 節點回歸 GNN |
+
+Pipeline C 刻意不放 user 節點：放了就回到協同過濾框架，且新影片無法冷啟動。
+GNN 優於 LightGBM 的地方在於：LightGBM 只能看影片自己的特徵向量；GNN 透過訊息傳遞
+把「同作者其他影片、同分類熱門影片、內容相似影片」的信號用**圖結構**傳進來。
 
 ---
 
@@ -320,20 +337,30 @@ shortvideo_mmgcn_poc/
 │       ├── Y.npy                          ← 標籤矩陣 (54088, 8)
 │       ├── weights.npy                    ← 每部影片的曝光次數（訓練權重）
 │       ├── meta.parquet                   ← pid 和標籤的對照表
-│       └── models/                        ← LightGBM 訓練好的模型
-│           ├── like_rate.txt
-│           ├── comment_rate.txt
-│           ├── ... （共 8 個）
-│           └── metrics.json               ← 評估結果
+│       ├── models/                        ← LightGBM 訓練好的模型
+│       │   ├── like_rate.txt
+│       │   ├── ... （共 8 個）
+│       │   └── metrics.json               ← Pipeline B 評估結果
+│       ├── hetero_graph.pt                ← [C] 異質圖（PyG HeteroData）
+│       └── models_gnn/                    ← [C] GNN 訓練產物
+│           ├── best_model.pt              ← 最佳驗證 checkpoint
+│           └── metrics_gnn.json           ← Pipeline C 評估結果
 │
 ├── scripts/                       ← 我們撰寫的所有 Python 腳本
 │   ├── build_behavior_labels.py   ← Step B1：從 interaction.csv 聚合標籤
 │   ├── align_features_labels.py   ← Step B2：對齊特徵和標籤
 │   ├── train_behavior_model.py    ← Step B3：訓練 LightGBM
 │   ├── predict_behavior.py        ← Step B4：對新影片做預測
+│   ├── build_hetero_graph.py      ← Step C1：建異質圖 (HeteroData .pt)
+│   ├── hetero_gnn.py              ← Step C2：HeteroGNN 模型定義
+│   ├── train_hetero.py            ← Step C3：訓練 + 評估 + 對比 LightGBM
+│   ├── predict_hetero.py          ← Step C4：推論（by-pid / from-raw 冷啟動）
 │   ├── prepare_video_yaml.py      ← 生成 MMRec smoke-test 子集
 │   ├── check_env.py               ← 環境檢查
 │   └── inspect_shortvideo_data.py ← 資料檢視
+│
+├── notes/
+│   └── pipelineC_data_check.md   ← Pipeline C 資料檢查記錄（真實欄位/shape）
 │
 └── logs/                          ← 所有執行過的 log 檔
     ├── lightgcn_smoke.log
@@ -376,6 +403,9 @@ conda create -p /Users/luoyi/Desktop/shortvideo_mmgcn_poc/.python310 python=3.10
     torch_geometric \
     numpy pandas scipy pyyaml lmdb tqdm matplotlib \
     lightgbm scikit-learn pyarrow
+
+# Pipeline C 額外需要的套件（sentence-transformers / faiss-cpu / opencv）
+.venv/bin/pip install sentence-transformers faiss-cpu opencv-python
 ```
 
 ### 7.3 為什麼要用虛擬環境？
@@ -724,9 +754,278 @@ LightGBM 是一種叫做「梯度提升樹（Gradient Boosting Tree）」的機�
 
 ---
 
-## 10. 目前實驗結果與解讀
+## 10. Pipeline C：異質圖 GNN 影片表現預測
 
-### 10.1 Pipeline A 結果：推薦系統
+> **目標**：輸入一支影片的封面或影片本身（＋可得屬性），輸出 8 個平台表現指標。
+> 主要應用場景：**冷啟動**——全新影片只有封面/影片、零互動紀錄。
+
+### 10.1 任務定義：為什麼是「節點回歸」而不是「推薦」？
+
+Pipeline A 在預測「這個使用者和這部影片的匹配度」，本質上是一個排名問題。
+Pipeline C 在預測「這部影片在整個平台的表現」，與特定使用者完全無關——這叫 **節點回歸（Node Regression）**。
+
+為什麼不放 user 節點？
+- 放了就回到協同過濾框架（每筆預測都要有使用者），新影片無法冷啟動
+- 我們想要的是：給一支全新的影片，不需要任何互動記錄，就能估計它的爆紅潛力
+
+8 個預測目標（與 Pipeline B 一致）：
+```
+like_rate          按讚率
+comment_rate       留言率
+follow_rate        追蹤率
+collect_rate       收藏率
+forward_rate       轉發率
+hate_rate          討厭率
+effective_view_rate  有效觀看率
+mean_watch_time    平均觀看秒數
+```
+
+### 10.2 建圖說明：以影片為中心的異質圖
+
+**四種節點**：
+
+| 節點類型 | 數量（工作集） | 節點特徵 |
+|---|---|---|
+| `video` | 54,088 | 視覺 768 維 + 文字 50 維 + log(duration) 1 維 = **819 維** |
+| `author` | 34,939 | log(粉絲數) + 訓練集影片數 + 訓練集 8 指標均值 = **10 維** |
+| `category` | 51 | 無數值特徵，用可學習 Embedding（128 維）表示 |
+
+**四種邊（全部加雙向）**：
+
+| 邊類型 | 定義 | 數量 |
+|---|---|---|
+| `(video, posted_by, author)` | 這支影片是這個作者發的 | 54,088 |
+| `(video, belongs_to, category)` | 這支影片屬於這個分類 | 54,088 |
+| `(video, similar_to, video)` | cosine 相似度最近的 10 支影片 | ≈ 540,896 |
+| 以上三種的反向邊 | 由 `T.ToUndirected()` 自動生成 | 同上 |
+
+**為什麼這樣建圖能解冷啟動？**
+
+當一支全新影片進來（零互動），GNN 還是能透過圖結構學到信號：
+
+```
+新影片
+├── 透過 similar_to 邊 → 找到內容相似的老影片 → 借它們的表現當參考
+├── 透過 posted_by 邊  → 找到作者的歷史影片  → 借作者聲譽當參考
+└── 透過 belongs_to 邊 → 找到同分類的熱門影片 → 借分類的基準當參考
+```
+
+`similar_to` 邊只用影片的**內容 embedding**（768 維視覺特徵）做 cosine kNN（k=10），
+完全不涉及任何標籤或互動資料，確保不洩漏未來資訊。
+
+**嚴防資料洩漏（leakage）**：
+
+author 節點的「歷史均值」特徵只能用 **train split** 的標籤計算。
+程式碼裡有明確的 assert：
+
+```python
+def build_author_features(meta_df, vid_attrs, train_mask):
+    train_pids = set(meta_df.loc[train_mask, "pid"])
+    # 確認沒有 val/test pid 混進來
+    assert used_pids.issubset(train_pids), "Author stats use non-train pids!"
+```
+
+建圖結束時會印出 leakage 自檢結果：
+```
+[LEAKAGE CHECK] Author stats pid coverage in train: 100.0% (must be 100%)
+[LEAKAGE CHECK] PASSED
+```
+
+### 10.3 模型架構：兩層異質訊息傳遞 + MLP 輸出頭
+
+```
+輸入層
+├── video.x (819維)   → Linear(-1, 128) → 128維
+├── author.x (10維)   → Linear(-1, 128) → 128維
+└── category          → Embedding(51, 128) → 128維
+
+         ↓ 第 1 層 HeteroConv（所有邊類型同步傳遞）↓
+         ↓ ReLU + Dropout ↓
+         ↓ 第 2 層 HeteroConv ↓
+         ↓ ReLU + Dropout ↓
+
+只取 video 節點 (128維)
+         ↓
+    MLP 輸出頭
+    Linear(128→64) → ReLU → Linear(64→8)
+         ↓
+輸出欄 0-6：sigmoid   (7 個 rate 指標，值域 [0,1])
+輸出欄  7 ：linear    (log-space mean_watch_time，預測後用 expm1 還原成秒)
+```
+
+**兩種可切換的訊息傳遞層**：
+
+| 變體 | 方法 | 說明 |
+|---|---|---|
+| `--model sage` | GraphSAGE (`SAGEConv`) | 採樣鄰居後平均，inductive 設定，能處理新節點（推薦用於冷啟動） |
+| `--model hgt` | Heterogeneous Graph Transformer (`HGTConv`) | 用 attention 機制加權不同類型的鄰居，GAT 的異質圖推廣（做 ablation 用） |
+
+### 10.4 訊息傳遞白話解釋
+
+以一支全新影片 v 為例，說明 2 層 GNN 怎麼把圖結構的信號傳進來：
+
+**Layer 1（第 1 輪）：收直接鄰居的信號**
+
+```
+v 的表示 = ReLU(
+    同作者的影片的特徵 × W_posted_by
+  + 同分類的影片的特徵 × W_belongs_to
+  + 內容相似的影片的特徵 × W_similar_to
+)
+```
+
+用數學式表示（更新式）：
+
+```
+h_v^(1) = σ( Σ_r  W_r · Agg_{u ∈ N_r(v)} h_u^(0) )
+```
+
+- `r`：邊類型（posted_by / belongs_to / similar_to 三種關係）
+- `N_r(v)`：在關係 r 下，v 的鄰居集合
+- `Agg`：聚合函數（GraphSAGE 用 mean，HGT 用 attention-weighted sum）
+- `W_r`：每種關係的可學習權重矩陣
+- `σ`：ReLU 激活函數
+
+白話翻譯：「把我的每種鄰居（作者、分類、相似影片）的特徵各自加權平均，再非線性變換一下，就是我的新表示。」
+
+**Layer 2（第 2 輪）：收 2 跳鄰居的信號**
+
+第 2 層的輸入是 Layer 1 輸出的 `h^(1)`，現在每個節點的向量已經融合了它的直接鄰居資訊。
+所以 Layer 2 聚合的，是「鄰居的鄰居」的資訊（2 跳鄰域）。
+
+**Readout（輸出）**：
+
+```
+MLP( h_v^(2) ) → 8 個數值
+```
+
+只有 video 節點參與輸出，author / category 節點的向量在訊息傳遞後就不再使用。
+
+### 10.5 訓練細節
+
+**loss 設計（有曝光次數加權）**：
+
+曝光次數越多，該影片的標籤越可靠，訓練時給它更高的權重：
+
+```
+Loss = Σ_{v ∈ train} w_v × (
+    Σ_{i=0}^{6} MSE(ŷ_i, y_i)     ← 7 個 rate 指標，MSE
+  + Huber(ŷ_7, y_7, δ=1.0)        ← watch_time，Huber 對 outlier 更穩健
+)
+```
+
+其中 `w_v = n_impressions_v / Σ n_impressions`（歸一化曝光次數）。
+
+**評估指標**（test set，每個 target 分開計算）：
+
+| 指標 | 說明 |
+|---|---|
+| MAE | 平均絕對誤差 |
+| RMSE | 均方根誤差 |
+| Spearman | 排名相關性（最重要，反映推薦場景的排序能力） |
+| nDCG@10 | 以真實 rate 為 relevance、用預測值排序計算 |
+| AUC@median | 二元分類（高於/低於中位數）的 AUC |
+
+**早停**：監控 val loss，patience=50。
+
+### 10.6 執行指令
+
+**完整流程（從零開始）**：
+
+```bash
+cd /Users/luoyi/Desktop/shortvideo_mmgcn_poc
+
+# Step C1：建異質圖（約 5-10 分鐘，主要時間在 CSV 讀取和 kNN）
+.venv/bin/python scripts/build_hetero_graph.py
+# 進階：使用 SBERT 文字特徵（384 維，首次會下載模型）
+.venv/bin/python scripts/build_hetero_graph.py --use-sbert
+
+# Step C2：訓練 HeteroGNN（默認 SAGE，~2-3 分鐘，早停於 66 epoch）
+.venv/bin/python scripts/train_hetero.py --model sage --epochs 300 --seed 42
+# 訓練 HGT（Attention 變體，做 ablation 比較）
+.venv/bin/python scripts/train_hetero.py --model hgt  --epochs 300 --seed 42
+
+# Step C3：對已有影片預測（by-pid 模式）
+.venv/bin/python scripts/predict_hetero.py by-pid --pid 84199269992
+
+# Step C3：對新影片冷啟動預測（from-raw 模式）
+.venv/bin/python scripts/predict_hetero.py from-raw \
+    --cover /path/to/cover.jpg --title "影片標題" --duration 90
+# 或用影片檔
+.venv/bin/python scripts/predict_hetero.py from-raw \
+    --video /path/to/clip.mp4 --title "影片標題"
+```
+
+**macOS 注意事項**：faiss 在 macOS 上有 OpenMP 衝突問題，加上環境變數即可：
+```bash
+KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python scripts/build_hetero_graph.py
+```
+
+### 10.7 預期結果與解讀
+
+```
+──────────────────────────────────────────────────────────────────────
+  HeteroGNN (SAGE) — test-set metrics (seed=42, 早停於 epoch 66)
+
+Target                      MAE     RMSE   Spearman   nDCG@10   AUC@med
+──────────────────────────────────────────────────────────────────────
+  like_rate              0.0658   0.0921    -0.034     0.007       nan
+  comment_rate           0.0452   0.0585     0.016     0.071       nan
+  follow_rate            0.0399   0.0506    -0.040     0.000       nan
+  collect_rate           0.0704   0.0810    -0.003     0.000       nan
+  forward_rate           0.0809   0.0905    -0.011     0.003       nan
+  hate_rate              0.0312   0.0372     0.018     0.000       nan
+  effective_view_rate    0.1524   0.1933    -0.010     0.597     0.492
+  mean_watch_time        505 s    22734 s    0.251     0.208     0.634
+──────────────────────────────────────────────────────────────────────
+```
+
+**誠實的解讀**：
+
+1. **`mean_watch_time` 是最有希望的指標**：Spearman = 0.251，遠高於 LightGBM 的 0.047。
+   觀看時長最受影片內容驅動（吸引人的影片讓你多看幾秒），圖結構把相似內容的信號傳了進來。
+
+2. **rate 類指標 Spearman ≈ 0**：這與 Pipeline B 的結論一致，也與理論預期相符。
+   rate 的中位數幾乎都是 0（極度稀疏），絕大多數影片的按讚率趨近 0，
+   少數爆紅影片則遠高於平均。從純內容預測這個「隨機爆紅效應」本就非常困難。
+
+3. **AUC@median 為 nan**：rate 指標中位數 = 0，二元分類（高於/低於 0）中幾乎全是「低」，
+   使 AUC 無法定義。這是正常的統計現象，不是程式錯誤。
+
+4. **mean_watch_time 的 MAE 很大（505 秒）**：模型的 **排名能力** 不錯（Spearman 高），
+   但 **絕對數值** 的校準還不足。推薦場景通常更在乎排名而非絕對值，所以 Spearman 是更重要的指標。
+
+### 10.8 對照組比較
+
+| 方法 | 種類 | `mean_watch_time` Spearman | 備注 |
+|---|---|---|---|
+| **Pipeline C HeteroGNN (SAGE)** | 異質圖 GNN | **0.251** | 本專案，圖結構信號 |
+| Pipeline B LightGBM | 梯度提升樹（非圖） | 0.047 | 只看影片自身特徵 |
+| MMVED / HMMVED | 內容人氣預測（Xie et al.） | 論文報告 | 有公開 code，建議做 baseline |
+
+主要評估指標：**Spearman**（排名相關）與 **nDCG@10**（Top-10 質量）。
+MAE/RMSE 受分佈偏斜影響大，僅作參考。
+
+### 10.9 參考文獻
+
+**方法基礎**：
+- Gilmer et al., *Neural Message Passing for Quantum Chemistry*, ICML 2017（訊息傳遞框架）
+- Kipf & Welling, *Semi-Supervised Classification with GCN*, ICLR 2017
+- Hamilton et al., *GraphSAGE: Inductive Representation Learning on Graphs*, NeurIPS 2017（inductive，對應新影片冷啟動）
+- Veličković et al., *Graph Attention Networks (GAT)*, ICLR 2018（attention 機制基礎）
+- Hu et al., *Heterogeneous Graph Transformer (HGT)*, WWW 2020（異質 attention，本專案 HGT 變體所用）
+
+**應用對標**：
+- GraphInf（GCN 做短影片人氣預測，快手資料，勝過 SOTA）— 自建異質圖的正當性
+- GraphTR（CIKM 2020，video–tag–user–media 異質網路解稀疏）— 異質圖原型
+- Xie et al., *MMVED*, WWW 2020 ＋ HMMVED（IEEE TMM）— 內容人氣預測經典 baseline，有公開 code，建議對比
+- Shang et al., *ShortVideo Dataset*, WWW 2025（本專案使用的資料集）
+
+---
+
+## 11. 目前實驗結果與解讀
+
+### 11.1 Pipeline A 結果：推薦系統
 
 所有實驗在 69 users、2,822 items 的 smoke-test 子集上跑，CPU 訓練。
 
@@ -761,7 +1060,7 @@ LightGBM 是一種叫做「梯度提升樹（Gradient Boosting Tree）」的機�
 
 要看有意義的結果，需要用完整的 153k items 資料在 GPU 上跑幾十個 epoch。
 
-### 10.2 Pipeline B 結果：行為預測
+### 11.2 Pipeline B 結果：行為預測
 
 54,088 部影片，測試集 5,409 部。
 
@@ -793,9 +1092,18 @@ Spearman 接近 0、AUC 接近 0.5，代表**目前的特徵對行為預測幾�
 2. **行為的高度偏斜**：like_rate 的中位數是 0，大部分影片幾乎沒人按讚，這讓分類邊界很難找到
 3. **缺乏屬性特徵**：duration、category、author_fans_count 這些屬性特徵可能比視覺特徵更能預測行為（受歡迎的作者 → 更高互動率）
 
+### 11.3 Pipeline C 結果：HeteroGNN
+
+見 [第 10 節 §10.7](#107-預期結果與解讀) 的完整結果表。
+重點摘要：
+
+- `mean_watch_time` Spearman = **0.251**（GNN）vs 0.047（LightGBM）：**GNN 明顯優勝**，圖結構把相似影片的觀看時長信號傳了進來
+- 6 個 rate 指標 Spearman ≈ 0：兩個模型都接近隨機，主因是 rate 分佈極度稀疏（中位數 = 0），從純內容預測絕對人氣極難
+- 建議後續：加入 SBERT 文字特徵（`--use-sbert`）、加深 GNN 層數（`--layers 3`）、與 MMVED/HMMVED 公開 baseline 對比
+
 ---
 
-## 11. 遇到的技術問題與解法
+## 12. 遇到的技術問題與解法
 
 ### 問題 1：MMRec 的新版套件相容性
 
@@ -871,44 +1179,50 @@ interaction.csv：user_id=3524 在時間 T 看了 pid=82927753107
 
 ---
 
-## 12. 下一步計畫
+## 13. 下一步計畫
 
 ### 短期（可以立刻做）
 
-1. **加入屬性特徵**
-   把 `interaction.csv` 裡的 duration、category_id、author_fans_count 等屬性加進 X 矩陣，
-   這些特徵通常對行為預測很有幫助（受歡迎的作者 → 更高互動）
+1. **Pipeline C：切換 SBERT 文字特徵**
+   目前使用的是舊版 50 維文字特徵；改用 SBERT（384 維）預計對 `mean_watch_time` 有提升：
+   ```bash
+   .venv/bin/python scripts/build_hetero_graph.py --use-sbert
+   .venv/bin/python scripts/train_hetero.py --model sage
+   ```
 
-2. **用 asr_en / title_en 的文字特徵**
-   目前使用的是推薦 pipeline 用的 text_feat.npy，是降維過的。
-   直接用影片的英文標題和 ASR 字幕，用 TF-IDF 或 Sentence-BERT 重新抽取文字特徵，
-   可能比現有的 50 維文字特徵更有代表性
+2. **Pipeline C：HGT ablation**
+   用 `--model hgt` 跑一次，對比 SAGE vs HGT 的 Spearman 差異，量化 attention 機制的貢獻
 
-3. **增大訓練子集**
-   目前推薦 pipeline 只用了 69 個使用者，試試 `--target-interactions 30000`，
-   看 Recall / NDCG 能不能提高
+3. **Pipeline C：與 MMVED/HMMVED 比較**
+   Xie et al. 有公開 code，在同一 test split 上跑，填入第 10.8 節的對照表
+
+4. **Pipeline B：加入屬性特徵**
+   把 `interaction.csv` 裡的 duration、category_id、author_fans_count 等屬性加進 LightGBM 的 X 矩陣
+
+5. **Pipeline A：增大訓練子集**
+   目前推薦 pipeline 只用了 69 個使用者，試試 `--target-interactions 30000`
 
 ### 中期（需要 GPU 環境）
 
-4. **在 RunPod 跑完整資料集**
-   租一台 GPU 機器（例如 A100），用完整 153,561 items 訓練，
-   預計需要 1-2 小時（相較於本機 CPU 要幾天）
+6. **Pipeline C：在 GPU 上跑更多 epoch（更大 d）**
+   `--d 256 --layers 3`，CPU 上跑很慢，在 A100/H100 上跑完整的超參搜尋
 
-5. **多 seed 比較**
-   目前只跑了 seed=999，結果有隨機性。
-   用 seed=1/2/3/999 各跑一次，取平均值，結果才有統計意義
+7. **Pipeline A：在 RunPod 跑完整資料集**
+   租一台 GPU 機器（例如 A100），用完整 153,561 items 訓練
 
-6. **加入 MMGCN 的 attribute 支援**
-   把影片的 category、author 等屬性也加入 MMGCN 的特徵，變成真正的多模態 + 多屬性模型
+8. **多 seed 比較**
+   C pipeline 目前只跑了 seed=42，用 seed=0/1/2/42 各跑一次，取平均值
 
 ### 長期
 
-7. **設計 ablation study**
-   分別移除視覺特徵、文字特徵、屬性特徵，各跑一次，量化每種資訊對推薦效果的貢獻
+9. **Pipeline C：加入 tag 節點**
+   `(video, has_tag, tag)` 邊目前是選用的，加入後可以引入 tag 語義信號
 
-8. **探索 cold-start 場景**
-   測試：對從未出現在訓練資料裡的新影片，模型的推薦準確度如何？
-   這是多模態推薦系統最重要的應用場景
+10. **設計跨 pipeline ablation study**
+    定量比較「有無圖結構」（B vs C）和「有無 user 節點」（A vs C）對 `mean_watch_time` 預測的影響
+
+11. **探索 Pipeline C 的真實冷啟動場景**
+    在完全沒有出現在訓練資料的新影片上測試，評估模型的 inductive 泛化能力
 
 ---
 
@@ -937,7 +1251,7 @@ A：需要安裝 `opencv-python`，而且本機需要能存取 ViT-B/16 的 torc
 
 ---
 
-*最後更新：2026-05-19*
+*最後更新：2026-05-31（新增 Pipeline C：異質圖 GNN 影片表現預測）*
 *論文來源：[A Large-scale Dataset with Behavior, Attributes, and Content of Mobile Short-video Platform](https://arxiv.org/pdf/2502.05922) (WWW 2025)*
 *推薦框架：[enoche/MMRec](https://github.com/enoche/MMRec)*
 *資料集：[tsinghua-fib-lab/ShortVideo_dataset](https://github.com/tsinghua-fib-lab/ShortVideo_dataset)*

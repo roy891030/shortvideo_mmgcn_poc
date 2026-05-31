@@ -1,1050 +1,985 @@
 % ============================================================
-%  以異質圖神經網路預測短影音平台表現：系統設計、模型建構與實驗分析
-%  概念驗證技術報告
+%  以異質圖神經網路預測短影音平台表現
+%  系統設計、模型建構與實驗分析
+%  概念驗證技術報告（第二版）
 %
-%  編譯方式（Ubuntu）：
-%    sudo apt-get install texlive-full texlive-xetex fonts-noto-cjk
-%    xelatex pipeline_report.tex && xelatex pipeline_report.tex
-%
-%  或使用 latexmk：
-%    latexmk -xelatex pipeline_report.tex
+%  編譯：xelatex pipeline_report.tex（需跑兩次更新目錄）
+%  Ubuntu 安裝：sudo apt-get install texlive-full texlive-xetex fonts-noto-cjk
 % ============================================================
-
 \documentclass[12pt, a4paper]{article}
-
-%% ── 中文支援 ──────────────────────────────────────────────
 \usepackage[UTF8, scheme=plain]{ctex}
-
-%% ── 版面 ──────────────────────────────────────────────────
 \usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=3cm]{geometry}
-\usepackage{setspace}
-\onehalfspacing
-
-%% ── 數學 ──────────────────────────────────────────────────
-\usepackage{amsmath, amssymb, amsthm}
+\usepackage{setspace}\onehalfspacing
+\usepackage{amsmath, amssymb}
 \usepackage{bm}
-
-%% ── 圖表 ──────────────────────────────────────────────────
 \usepackage{tikz}
-\usetikzlibrary{
-  arrows.meta,
-  positioning,
-  shapes.geometric,
-  shapes.arrows,
-  shapes.multipart,
-  fit,
-  backgrounds,
-  calc,
-  decorations.pathreplacing,
-  decorations.markings,
-  matrix,
-  chains
-}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\usepackage{graphicx}
-\usepackage{float}
-\usepackage{caption}
-\usepackage{subcaption}
-
-%% ── 表格 ──────────────────────────────────────────────────
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{tabularx}
-\usepackage{array}
-\usepackage{longtable}
-
-%% ── 程式碼 ────────────────────────────────────────────────
-\usepackage{listings}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, shapes.arrows,
+                fit, backgrounds, calc, decorations.pathreplacing, matrix}
+\usepackage{booktabs, multirow, tabularx, array}
 \usepackage{xcolor}
-
-%% ── 超連結 ────────────────────────────────────────────────
-\usepackage[colorlinks=true, linkcolor=blue!70!black,
-            citecolor=green!50!black, urlcolor=blue!70!black]{hyperref}
-
-%% ── 參考文獻 ──────────────────────────────────────────────
+\usepackage{listings}
+\usepackage[colorlinks=true, linkcolor=blue!60!black,
+            citecolor=green!50!black, urlcolor=blue!60!black]{hyperref}
 \usepackage{natbib}
-
-%% ── 版面設定 ──────────────────────────────────────────────
+\usepackage{float, caption, subcaption, graphicx}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
 \usepackage{fancyhdr}
-\pagestyle{fancy}
-\fancyhf{}
-\rhead{\small 短影音平台表現預測：技術報告}
-\lhead{\small \leftmark}
-\cfoot{\thepage}
+\pagestyle{fancy}\fancyhf{}
+\rhead{\small 短影音平台表現預測：技術報告 v2}
+\lhead{\small \leftmark}\cfoot{\thepage}
 
-%% ── 色彩定義 ──────────────────────────────────────────────
-\definecolor{vidblue}{RGB}{41,  128, 185}   % video 節點
-\definecolor{authgreen}{RGB}{39, 174, 96}   % author 節點
-\definecolor{catred}{RGB}{192,  57,  43}    % category 節點
-\definecolor{tagpurp}{RGB}{142,  68, 173}   % tag 節點
+%% ── 顏色 ────────────────────────────────────────────
+\definecolor{vidblue}{RGB}{41, 128, 185}
+\definecolor{authgreen}{RGB}{39, 174, 96}
+\definecolor{catred}{RGB}{192, 57, 43}
 \definecolor{lightbg}{RGB}{248, 249, 250}
 \definecolor{codebg}{RGB}{245, 245, 245}
-\definecolor{hlgold}{RGB}{241, 196,  15}
-\definecolor{darktext}{RGB}{44,  62,  80}
+\definecolor{hlgold}{RGB}{241, 196, 15}
+\definecolor{darktext}{RGB}{44, 62, 80}
+\definecolor{tipsbox}{RGB}{232, 245, 233}
+\definecolor{warnbox}{RGB}{255, 243, 205}
+\definecolor{infobox}{RGB}{227, 242, 253}
 
-%% ── 程式碼樣式 ────────────────────────────────────────────
+%% ── tcolorbox 樣式 ──────────────────────────────────
+\newtcolorbox{tipbox}[1][]{
+  colback=tipsbox, colframe=authgreen!70, fonttitle=\bfseries,
+  title={#1}, rounded corners, left=4pt, right=4pt}
+\newtcolorbox{warnbox2}[1][]{
+  colback=warnbox, colframe=hlgold!80, fonttitle=\bfseries,
+  title={#1}, rounded corners, left=4pt, right=4pt}
+\newtcolorbox{infobox2}[1][]{
+  colback=infobox, colframe=vidblue!70, fonttitle=\bfseries,
+  title={#1}, rounded corners, left=4pt, right=4pt}
+\newtcolorbox{analogybox}[1][]{
+  colback=gray!6, colframe=gray!40, fonttitle=\bfseries\itshape,
+  title={#1}, rounded corners, breakable}
+
+%% ── 程式碼樣式 ──────────────────────────────────────
 \lstset{
-  backgroundcolor=\color{codebg},
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  frame=single,
-  rulecolor=\color{gray!40},
-  keywordstyle=\color{blue!70!black}\bfseries,
-  commentstyle=\color{green!50!black}\itshape,
-  stringstyle=\color{red!70!black},
-  numbers=left,
-  numberstyle=\tiny\color{gray},
-  xleftmargin=1.5em,
-  language=Python
-}
+  backgroundcolor=\color{codebg}, basicstyle=\ttfamily\small,
+  breaklines=true, frame=single, rulecolor=\color{gray!40},
+  numbers=left, numberstyle=\tiny\color{gray}, xleftmargin=1.5em,
+  language=bash, keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray}\itshape}
 
-%% ── TikZ 節點樣式 ────────────────────────────────────────
+%% ── TikZ 樣式 ───────────────────────────────────────
 \tikzset{
-  vidnode/.style   = {draw=vidblue,  fill=vidblue!15,  rounded corners=4pt,
-                      minimum width=1.8cm, minimum height=0.7cm,
-                      font=\small\bfseries, text=darktext},
-  authnode/.style  = {draw=authgreen,fill=authgreen!15, rectangle,
-                      minimum width=1.8cm, minimum height=0.7cm,
-                      font=\small\bfseries, text=darktext},
-  catnode/.style   = {draw=catred,   fill=catred!15,   diamond, aspect=2,
-                      minimum width=2.2cm, minimum height=0.7cm,
-                      font=\small\bfseries, text=darktext},
-  tagnode/.style   = {draw=tagpurp,  fill=tagpurp!15,  ellipse,
-                      minimum width=1.8cm, minimum height=0.6cm,
-                      font=\small\bfseries, text=darktext},
-  layerbox/.style  = {draw=gray!60,  fill=lightbg, rounded corners=6pt,
-                      minimum width=7cm, minimum height=1.0cm,
-                      font=\small, text=darktext, align=center},
-  outbox/.style    = {draw=gray!50,  fill=yellow!10, rounded corners=4pt,
-                      minimum width=1.4cm, minimum height=0.7cm,
-                      font=\footnotesize, align=center},
-  arrowstyle/.style= {-Stealth, thick, draw=gray!70},
-  msgedge/.style   = {-Stealth, thick, draw=vidblue, dashed},
-  hieredge/.style  = {-Stealth, draw=gray!50, densely dotted},
+  vidnode/.style  ={draw=vidblue,  fill=vidblue!15, rounded corners=4pt,
+                    minimum width=1.8cm, minimum height=0.7cm,
+                    font=\small\bfseries, text=darktext},
+  authnode/.style ={draw=authgreen,fill=authgreen!15, rectangle,
+                    minimum width=1.8cm, minimum height=0.7cm,
+                    font=\small\bfseries, text=darktext},
+  catnode/.style  ={draw=catred,   fill=catred!15,   diamond, aspect=2.2,
+                    minimum width=2.4cm, minimum height=0.7cm,
+                    font=\small\bfseries, text=darktext},
+  layerbox/.style ={draw=gray!60,  fill=lightbg, rounded corners=6pt,
+                    minimum width=7cm, minimum height=1.0cm,
+                    font=\small, text=darktext, align=center},
+  arrowstyle/.style={-Stealth, thick, draw=gray!70},
 }
 
-%% ── 標題 ──────────────────────────────────────────────────
+%% ── 標題 ────────────────────────────────────────────
 \title{
   \vspace{-1cm}
-  {\LARGE\bfseries 以異質圖神經網路預測短影音平台表現}\\[0.6em]
-  {\large 系統設計、模型建構與實驗分析}\\[0.5em]
-  {\normalsize\itshape 概念驗證技術報告（Proof of Concept Report）}
+  {\LARGE\bfseries 以異質圖神經網路預測短影音平台表現}\\[0.5em]
+  {\large 系統設計、模型建構與實驗分析}\\[0.4em]
+  {\normalsize\itshape 概念驗證技術報告（第二版）}
 }
 \author{roy891030}
 \date{2026 年 5 月}
 
-%% ════════════════════════════════════════════════════════════
 \begin{document}
+\maketitle\thispagestyle{fancy}
 
-\maketitle
-\thispagestyle{fancy}
-
+% ────────────────────────────────────────────────────
 \begin{abstract}
-短影音平台每日產生數億次影片曝光，如何在新影片上架的第一時間估計其互動潛力，
-是平台流量調度與創作者支持的核心痛點。傳統協同過濾推薦系統高度依賴歷史互動，
-在零互動的冷啟動場景下完全失效；梯度提升樹等非圖模型則因無法利用影片之間的
-語義關係，對行為指標的排名預測能力極為有限。
+短影音平台每天上傳數十萬支新影片，如何在新影片上架的第一時間估計它的互動潛力，
+是平台流量調度的核心問題。傳統的推薦系統需要「使用者歷史互動資料」才能運作，
+對一支剛上傳、沒有任何人看過的新影片完全束手無策。
 
-本報告設計並實作了一套三管線並行研究框架：Pipeline~A 採用多模態圖神經網路
-（MMGCN）解決使用者-影片推薦問題；Pipeline~B 以 LightGBM 作為不依賴圖結構
-的回歸基線；Pipeline~C 為本報告核心，以影片為中心建立異質圖，融合視覺內容、
-作者背景與分類資訊，透過兩層異質圖卷積（GraphSAGE 或 HGT 變體）進行多任務
-節點回歸，可在全新影片零互動的冷啟動場景下直接推論 8 個平台行為指標。
+本報告設計了一套三管線研究框架，其中核心創新（Pipeline C）建立了一張以影片為
+中心的關係網路（異質圖），把影片的視覺內容、作者背景、同分類影片三種信號用
+數學方式傳遞融合，讓一支全新影片也能「借用鄰居的資訊」來估計自己的表現。
 
-實驗結果顯示，在最受內容驅動的指標——平均觀看時長上，Pipeline~C 的 Spearman
-排名相關係數達 0.251，顯著優於 LightGBM 的 0.047，初步驗證了圖結構在內容人氣
-預測任務上的有效性。
+在 RTX~4090 GPU 上訓練結果：平均觀看時長的排名相關係數達 \textbf{0.256}，
+比不使用圖結構的傳統方法高出 4 倍以上。
 \end{abstract}
 
-\tableofcontents
-\newpage
+\tableofcontents\newpage
 
-%% ════════════════════════════════════════════════════════════
-\section{研究動機與核心痛點}
+% ════════════════════════════════════════════════════
+\section{讀前必讀：關鍵概念白話速覽}
+\label{sec:concepts}
+
+本節幫助沒有深度學習背景的讀者快速理解後文會用到的概念，
+有相關基礎的讀者可以跳過。
+
+\subsection*{什麼是「特徵向量」？}
+
+電腦無法直接理解「影片的畫面很有趣」，它只認識數字。
+\textbf{特徵向量}就是用一串數字來代表一個物件的特性。
+例如把一支影片的畫面送進 ViT-B/16（一種圖像理解 AI 模型）後，
+會輸出一個 768 個數字組成的清單——這 768 個數字共同描述了這支影片的視覺風格，
+就像一支影片的「視覺指紋」。
+
+\subsection*{什麼是「圖」？}
+
+這裡的圖不是長條圖，而是數學上的\textbf{圖論（Graph Theory）}概念：
+\begin{itemize}
+\item \textbf{節點（Node）}：圖中的每一個「點」，代表一個實體。例如每支影片是一個節點。
+\item \textbf{邊（Edge）}：連接兩個節點的「線」，代表兩者之間的關係。例如「這支影片是這個作者拍的」就是一條邊。
+\end{itemize}
+社群網路（Facebook 的好友關係）、交通網路（城市之道路）都是圖的例子。
+
+\subsection*{什麼是「圖神經網路（GNN）」？}
+
+普通的神經網路只能處理固定格式的表格資料。
+GNN 則是設計來處理「有關係的資料（圖）」的神經網路。
+
+\begin{analogybox}[生活中的類比：問問鄰居]
+想像你要猜一首新歌會不會流行，但你對這首歌一無所知。
+你可以問：這個歌手過去的歌都怎樣？這個曲風類型最近有沒有在流行？
+和這首歌最像的其他歌有沒有爆紅？
+
+GNN 做的事情完全一樣：讓每個節點「問問自己的鄰居」，
+把鄰居的資訊收集過來，更新自己的表示向量。
+對一支新影片來說，它的鄰居是作者、所屬分類、以及視覺風格最相似的其他影片。
+\end{analogybox}
+
+\subsection*{什麼是「訊息傳遞」？}
+
+GNN 的核心運作機制叫做\textbf{訊息傳遞（Message Passing）}。
+每一輪（稱為一層）的過程如下：
+\begin{enumerate}
+\item 每個節點把自己目前的特徵向量傳給所有相連的鄰居（「傳遞訊息」）
+\item 每個節點收集來自鄰居的訊息，用數學方式聚合（通常是加總或平均）
+\item 每個節點用聚合後的結果更新自己的特徵向量
+\end{enumerate}
+跑 2 層 GNN，每個節點就能「感知到」距離它 2 步以內的所有鄰居的資訊。
+
+\subsection*{什麼是「冷啟動」？}
+
+推薦系統最頭痛的問題之一。一支全新影片上傳後，沒有任何人看過它，
+所以沒有任何互動資料（按讚、觀看時長等）。這種「一片空白」的狀態就叫\textbf{冷啟動（Cold Start）}。
+傳統的協同過濾系統（根據「你看過的東西和其他人看過的東西」來推薦）在冷啟動時完全失效。
+本報告的 Pipeline C 刻意設計成：即使沒有任何互動記錄，也能用影片的視覺內容和作者背景做預測。
+
+\subsection*{什麼是「Spearman 相關係數」？}
+
+\textbf{Spearman 相關係數}衡量「預測排名」和「真實排名」的一致程度：
+\begin{itemize}
+\item $= +1.0$：預測排名和真實排名完全一致（最好）
+\item $= 0.0$：和瞎猜一樣，沒有相關
+\item $= -1.0$：完全相反（預測第 1 名的，真實上排最後）
+\end{itemize}
+在推薦系統中，排名能力比絕對數值更重要——我們更在意「哪支影片應該排第一」，而不是「按讚率精確到幾位小數」。
+
+% ════════════════════════════════════════════════════
+\section{研究動機：為什麼要做這件事？}
 \label{sec:motivation}
 
-\subsection{短影音生態的結構性挑戰}
+\subsection{短影音平台的三個核心痛點}
 
-短影音平台的核心商業邏輯建立在精準流量分配之上：正確的影片在正確的時機推送給
-正確的使用者，才能最大化平台黏性與創作者收益。然而，此目標面臨數個根本性的
-矛盾：
+\begin{enumerate}[leftmargin=*, label=\textbf{痛點 \arabic*.}]
 
-\begin{enumerate}[leftmargin=*, label=\textbf{\arabic*.}]
+\item \textbf{新影片冷啟動無解}
 
-\item \textbf{內容規模與冷啟動的矛盾}。平台每天上傳的新影片以數十萬計，
-  每支新影片在上線初期完全沒有互動資料。協同過濾類模型（包括矩陣分解、
-  圖推薦系統）的推薦品質正比於互動歷史的豐富度，對全新影片基本失效。
+  平台每天上傳幾十萬支新影片。在最初幾小時，這些影片沒有任何歷史互動資料。
+  主流推薦演算法（協同過濾）完全依賴「這個使用者過去喜歡過什麼」和
+  「和你口味相似的人喜歡什麼」——新影片兩者皆無，只能靠運氣分配初始流量。
 
-\item \textbf{行為稀疏性與標籤偏斜的矛盾}。即使是曝光超過 10 次的影片，
-  按讚率的中位數仍為 0.000，零按讚影片佔 84.62\%；轉發率零值更高達 98.02\%。
-  這種極度偏斜的分佈使得任何試圖從影片特徵直接回歸行為率的模型都面臨嚴峻挑戰。
+\item \textbf{互動行為的極度偏斜}
 
-\item \textbf{影片語義關聯與孤立特徵的矛盾}。梯度提升樹等表格型模型只能利用
-  影片自身的特徵向量，無法建模「同作者其他影片的歷史表現」或「同分類熱門影片
-  的互動基準」等圖結構信號。
+  並非所有影片都能獲得均等的互動。表~\ref{tab:label_stats} 顯示，
+  按讚率的中位數是 \textbf{0}——意思是超過一半的影片沒有人按讚。
+  這種「贏者全拿」的分佈讓任何預測模型都面臨嚴峻挑戰。
+
+\item \textbf{影片之間的語義關聯被忽視}
+
+  傳統機器學習模型（如梯度提升樹）只能看每支影片自己的特徵，
+  無法利用「同一個作者的其他影片也很受歡迎」或「和這支影片視覺風格最像的 10 支影片都爆紅了」
+  這類\textbf{圖結構信號}。這正是 GNN 能夠補充的地方。
 
 \end{enumerate}
 
-\subsection{研究目標}
+\subsection{本報告的核心研究問題}
 
-本報告針對上述三個矛盾，提出如下研究問題：
+\begin{infobox2}[核心問題]
+在不依賴任何使用者互動歷史的前提下，能否透過建立以影片為中心的關係圖，
+讓圖神經網路的訊息傳遞機制有效地融合「作者背景」、「分類信號」和
+「相似影片的歷史表現」，使冷啟動場景下的影片表現預測優於純特徵的傳統方法？
+\end{infobox2}
 
-\begin{quote}
-\itshape
-在不依賴任何使用者互動歷史的前提下，能否透過建立以影片為中心的異質圖、
-並施以圖神經網路的訊息傳遞，有效預測新影片的平台表現指標，
-並在排名能力上優於純特徵的非圖基線？
-\end{quote}
+% ════════════════════════════════════════════════════
+\section{資料集與取得方式}
+\label{sec:data}
 
-這個問題的正向回答，將對冷啟動流量預分配、創作者內容質量早期反饋、
-以及多模態推薦系統的初始化提供直接的工程價值。
+\subsection{ShortVideo 資料集介紹}
 
-%% ────────────────────────────────────────────────────────────
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  pipe/.style  = {draw=gray!60, fill=lightbg, rounded corners=8pt,
-                  minimum width=4.0cm, minimum height=8cm,
-                  text width=3.7cm, align=center},
-  ptitle/.style= {font=\bfseries\small, text=white, rounded corners=4pt,
-                  minimum width=3.6cm, minimum height=0.8cm, align=center},
-  pitem/.style = {font=\footnotesize, text=darktext, align=left,
-                  text width=3.4cm},
-  node distance = 0.5cm
-]
-
-%% Pipeline A
-\node[pipe] (pA) at (0,0) {};
-\node[ptitle, fill=vidblue!80!black] (tA) at (0, 3.3) {Pipeline A};
-\node[pitem] at (0, 2.4) {\textbf{任務}：使用者推薦};
-\node[pitem] at (0, 1.5) {\textbf{方法}：MMGCN\\（多模態圖卷積）};
-\node[pitem] at (0, 0.5) {\textbf{輸入}：使用者歷史\\互動 + 影片內容};
-\node[pitem] at (0,-0.5) {\textbf{輸出}：每人的影片排名};
-\node[pitem] at (0,-1.5) {\textbf{圖型}：使用者-影片\\二部圖（有 user 節點）};
-\node[pitem] at (0,-2.7) {\textcolor{red!70!black}{\textbf{無法冷啟動}}};
-
-%% Pipeline B
-\node[pipe] (pB) at (5,0) {};
-\node[ptitle, fill=authgreen!80!black] (tB) at (5, 3.3) {Pipeline B};
-\node[pitem] at (5, 2.4) {\textbf{任務}：行為預測};
-\node[pitem] at (5, 1.5) {\textbf{方法}：LightGBM\\（梯度提升樹）};
-\node[pitem] at (5, 0.5) {\textbf{輸入}：影片特徵向量\\（819 維）};
-\node[pitem] at (5,-0.5) {\textbf{輸出}：8 個行為指標};
-\node[pitem] at (5,-1.5) {\textbf{圖型}：無圖結構\\（純特徵回歸）};
-\node[pitem] at (5,-2.7) {\textcolor{hlgold!80!black}{\textbf{弱冷啟動能力}}};
-
-%% Pipeline C
-\node[pipe] (pC) at (10,0) {};
-\node[ptitle, fill=catred!80!black] (tC) at (10, 3.3) {Pipeline C};
-\node[pitem] at (10, 2.4) {\textbf{任務}：節點回歸};
-\node[pitem] at (10, 1.5) {\textbf{方法}：HeteroGNN\\（異質圖神經網路）};
-\node[pitem] at (10, 0.5) {\textbf{輸入}：影片內容 +\\作者 + 分類 + 相似影片};
-\node[pitem] at (10,-0.5) {\textbf{輸出}：8 個行為指標};
-\node[pitem] at (10,-1.5) {\textbf{圖型}：以影片為中心\\異質圖（無 user 節點）};
-\node[pitem] at (10,-2.7) {\textcolor{authgreen!80!black}{\textbf{冷啟動主要目標}}};
-
-%% 箭頭與標籤
-\draw[-Stealth, thick, gray!60] (pA.east) -- (pB.west)
-  node[midway, above, font=\scriptsize, text=gray] {推薦 → 行為};
-\draw[-Stealth, thick, gray!60] (pB.east) -- (pC.west)
-  node[midway, above, font=\scriptsize, text=gray] {非圖 → 圖};
-
-\end{tikzpicture}
-\caption{三管線系統總覽。Pipeline~A 解決個人化推薦問題，Pipeline~B 提供非圖基線，
-Pipeline~C 為核心創新，以異質圖達成冷啟動下的影片表現預測。}
-\label{fig:pipeline_overview}
-\end{figure}
-
-圖~\ref{fig:pipeline_overview} 展示三條管線在任務定義、方法選擇、圖結構設計
-與冷啟動能力上的系統性對比。
-
-%% ════════════════════════════════════════════════════════════
-\section{相關工作}
-\label{sec:related}
-
-\subsection{圖神經網路基礎}
-
-\citet{kipf2017semi} 提出的圖卷積網路（GCN）奠定了「在圖上進行訊息傳遞以聚合
-鄰域資訊」的基礎框架。其核心思想是：節點的表示向量應同時反映自身特徵與鄰居
-的特徵，透過譜域近似實現，但受限於轉導推論（transductive inference），
-對新節點需重新訓練。
-
-\citet{hamilton2017inductive} 提出的 GraphSAGE 解決了歸納泛化問題——透過
-對鄰域進行取樣後聚合（sample-and-aggregate），可以在訓練時未見過的節點上
-直接推論，這對影片冷啟動場景至關重要。
-
-\citet{velivckovic2018graph} 提出的圖注意力網路（GAT）引入了可學習的注意力
-係數，使鄰居對中心節點的貢獻依照重要性加權，而非均等聚合。
-
-\citet{hu2020heterogeneous} 的 HGT（Heterogeneous Graph Transformer）將
-注意力機制推廣至異質圖，對不同類型的節點和邊各自設計獨立的注意力投影，
-是本報告 HGT 實驗變體的直接方法來源。
-
-\subsection{多模態推薦與影片人氣預測}
-
-\citet{wei2019mmgcn} 提出的 MMGCN 在使用者-影片二部圖上同時建模視覺、
-文字與互動三種模態，是 Pipeline~A 的直接實作來源。
-
-\citet{xie2020mmved} 提出 MMVED 框架，利用多模態融合直接從影片內容預測人氣，
-是與 Pipeline~C 最直接的對標基線，且有公開程式碼可供重現。其後續工作
-HMMVED~\citep{xie2021hmmved} 進一步引入階層式語義結構。
-
-GraphInf \citep{graphinf2022} 以圖卷積網路處理快手資料上的短影片人氣預測，
-驗證了圖結構在此類任務上的有效性。GraphTR \citep{chen2020graphtr} 則建立了
-影片-標籤-使用者-媒體異質網路來解決互動稀疏問題，是 Pipeline~C 的設計靈感來源之一。
-
-\subsection{多任務學習}
-
-\citet{kendall2018multi} 提出以任務不確定性（aleatoric uncertainty）動態加權
-多任務損失的方法，有效解決了不同任務因量綱和難度差異而難以平衡的問題，
-是 Pipeline~C 後續改進的候補方案。
-
-%% ════════════════════════════════════════════════════════════
-\section{資料集}
-\label{sec:dataset}
-
-\subsection{ShortVideo 資料集概述}
-
-本研究使用 \citet{shang2025shortvideo} 發表於 WWW 2025 的 ShortVideo 資料集。
-此資料集從某主流短影音平台採集，包含真實的使用者行為日誌與豐富的影片屬性，
-是目前公開規模最大、行為類型最完整的短影音研究資料集之一。
+本研究使用清華大學 \citet{shang2025shortvideo} 發表於 WWW 2025 的 ShortVideo 資料集，
+從某真實短影音平台採集，是目前公開規模最大、行為類型最完整的短影音研究資料集之一。
 
 \begin{table}[H]
 \centering
-\caption{ShortVideo 資料集基本統計（本報告使用的 Tiny 版本）}
+\caption{資料集基本統計（本報告使用版本）}
 \label{tab:dataset}
 \begin{tabular}{lrl}
 \toprule
 \textbf{項目} & \textbf{數量} & \textbf{說明} \\
 \midrule
-曝光記錄總數 & 6,767,010 & 每列 = 一次影片曝光事件 \\
-獨立使用者數 & 10,000 & 已雜湊匿名化 \\
-獨立影片數 & 153,561 & 含已抽取視覺特徵者 \\
-資料時間跨度 & 7 天 & 2022 年 9 月 16 日至 22 日 \\
+曝光記錄總數   & 6,767,010 & 每列 = 一位使用者觀看一支影片一次 \\
+獨立使用者數   & 10,000 & 已雜湊匿名 \\
+獨立影片數     & 153,561 & 含視覺特徵的完整集合 \\
+資料時間跨度   & 7 天 & 2022-09-16 至 2022-09-22 \\
 \midrule
-有效標籤影片數 & 98,999 & 曝光次數 $\geq 10$ 次 \\
-工作集影片數 & 54,088 & 同時具備標籤與預抽特徵 \\
-分類數（工作集） & 51 & 三級分類體系 \\
-作者數（工作集） & 34,939 & \\
+有效標籤影片   & 98,999 & 曝光 $\geq 10$ 次，標籤統計較穩定 \\
+Pipeline C 工作集 & \textbf{54,088} & 有標籤 $\cap$ 有預抽特徵的影片 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{warnbox2}[「Tiny」的名字會誤導人]
+這份資料集雖然叫「tiny version」，但它包含了完整的 7 天互動日誌（670 萬行）
+和所有 153,561 支影片的預抽特徵。「Tiny」指的是原始 .mp4 影片檔只附了 10 支示範，
+\textbf{互動資料和視覺特徵是完整的}，對 PoC 完全足夠。
+\end{warnbox2}
+
+\subsection{為什麼工作集只有 54,088 部？}
+
+Pipeline C 需要兩樣東西：（1）影片的行為標籤（按讚率等），（2）影片的視覺特徵向量。
+兩者來自不同的資料檔案，覆蓋的影片集合有差異：
+
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=vidblue!15, draw=vidblue] (0,0) ellipse (3.0cm and 1.2cm);
+\draw[fill=authgreen!15, draw=authgreen] (1.5,0) ellipse (2.5cm and 1.0cm);
+\node[font=\small] at (-1.5, 0) {有行為標籤};
+\node[font=\small] at (-1.5,-0.4) {98,999 部};
+\node[font=\small] at (3.3, 0) {有視覺特徵};
+\node[font=\small] at (3.3,-0.4) {86,578 部};
+\node[font=\small\bfseries] at (1.2, 0) {工作集};
+\node[font=\small] at (1.2,-0.4) {54,088 部};
+\end{tikzpicture}
+\end{center}
+
+另外 44,911 部有標籤但沒有特徵的影片，需要從清華主站下載 \texttt{video\_feature\_total/}
+後才能納入訓練。
 
 \subsection{行為標籤的分佈特性}
 
 \begin{table}[H]
 \centering
-\caption{8 個行為指標在工作集（54,088 部影片）上的分佈統計}
+\caption{8 個行為指標的分佈（54,088 部影片工作集）}
 \label{tab:label_stats}
 \begin{tabular}{lrrrr}
 \toprule
-\textbf{指標} & \textbf{中位數} & \textbf{均值} & \textbf{最大值} & \textbf{零值比例} \\
+\textbf{指標} & \textbf{中位數} & \textbf{均值} & \textbf{零值比例} & \textbf{預測難度} \\
 \midrule
-\texttt{like\_rate}            & 0.000 & 0.026  & 1.000  & 84.62\% \\
-\texttt{comment\_rate}         & 0.000 & 0.004  & 1.000  & 96.72\% \\
-\texttt{follow\_rate}          & 0.000 & 0.004  & 1.000  & 96.90\% \\
-\texttt{collect\_rate}         & 0.000 & 0.006  & 1.000  & 95.17\% \\
-\texttt{forward\_rate}         & 0.000 & 0.002  & 1.000  & 98.02\% \\
-\texttt{hate\_rate}            & 0.000 & 0.001  & 0.500  & 99.20\% \\
-\texttt{effective\_view\_rate} & 0.833 & 0.791  & 1.000  &  1.78\% \\
-\texttt{mean\_watch\_time}     & 22.47 秒 & 33.37 秒 & 545 秒 &  0.17\% \\
+\texttt{like\_rate}            & 0.000 & 0.026 & 84.6\% & 極難 \\
+\texttt{comment\_rate}         & 0.000 & 0.004 & 96.7\% & 極難 \\
+\texttt{follow\_rate}          & 0.000 & 0.004 & 96.9\% & 極難 \\
+\texttt{collect\_rate}         & 0.000 & 0.006 & 95.2\% & 極難 \\
+\texttt{forward\_rate}         & 0.000 & 0.002 & 98.0\% & 極難 \\
+\texttt{hate\_rate}            & 0.000 & 0.001 & 99.2\% & 極難 \\
+\texttt{effective\_view\_rate} & 0.833 & 0.791 &  1.8\% & 中等 \\
+\texttt{mean\_watch\_time}     & 22 秒 & 33 秒 &  0.2\% & \textbf{最容易} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-從表~\ref{tab:label_stats} 可以看出，除 \texttt{effective\_view\_rate} 與
-\texttt{mean\_watch\_time} 外，其餘六個 rate 指標的中位數均為零——這是
-短影音互動的典型「長尾效應」：絕大多數影片鮮少獲得主動互動，
-極少數爆紅影片主導了均值與最大值。此特性使得 rate 指標的預測難度遠高於
-觀看時長類指標，在解讀實驗結果時需特別注意。
+\textbf{為什麼「rate」類指標那麼難預測？}
+因為大部分影片的按讚率都是 0——你預測所有影片都是 0，準確率高達 84.6\%，
+但這毫無意義，因為你完全沒有區分「爆紅的 15.4\%」和「路人的 84.6\%」的能力。
+只有 \texttt{mean\_watch\_time}（觀看時長）的分佈相對正常，
+且最直接受影片內容品質影響，是最值得用 GNN 預測的指標。
 
-\subsection{特徵矩陣說明}
+\subsection{資料取得完整指南（SSH 環境）}
 
-原始影片特徵由官方資料集預先抽取，以矩陣格式存放：
-
-\begin{itemize}
-\item \textbf{視覺特徵}（\texttt{image\_feat.npy}）：形狀 $\langle 153561, 768 \rangle$，
-  使用 ViT-B/16 對影片多幀均勻取樣後平均，每支影片輸出 768 維表示向量。
-
-\item \textbf{文字特徵}（\texttt{text\_feat.npy}）：形狀 $\langle 153561, 50 \rangle$，
-  50 維預計算文字嵌入向量，可替換為 SBERT（384 維）以提升語義品質。
-
-\item \textbf{索引對照}（\texttt{pids.txt}）：第 $i$ 行對應矩陣第 $i$ 列所屬的
-  真實影片 ID（\texttt{pid}），$-1$ 表示該列無效。
-\end{itemize}
-
-%% ════════════════════════════════════════════════════════════
-\section{Pipeline C：建圖設計}
-\label{sec:graph}
-
-\subsection{節點與邊的設計哲學}
-
-Pipeline~C 的圖結構設計遵循三個原則：
-（1）以影片為中心，不引入使用者節點；
-（2）異質性——不同類型的節點和邊擁有各自的語義，避免強行同構帶來的資訊混淆；
-（3）防洩漏——用於構建圖結構的任何特徵，均不能包含測試集的標籤資訊。
-
-%% ────────────────────────────────────────────────────────────
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=2.0cm and 2.5cm, scale=0.95]
-
-%% 中央：video 節點群
-\node[vidnode] (v1) at (0, 0)    {影片 $v_1$};
-\node[vidnode] (v2) at (0, 2.2)  {影片 $v_2$};
-\node[vidnode] (v3) at (0,-2.2)  {影片 $v_3$};
-\node[vidnode] (v4) at (2.8, 1.1){影片 $v_4$};
-\node[vidnode, draw=vidblue!60, fill=vidblue!30, very thick]
-               (vnew) at (-3.0, 0){{\bfseries 新影片} $v_?$};
-
-%% author 節點（右上）
-\node[authnode] (a1) at (6.5, 2.5)  {作者 $a_1$};
-\node[authnode] (a2) at (6.5,-0.5)  {作者 $a_2$};
-
-%% category 節點（右下）
-\node[catnode]  (c1) at (5.5,-2.8)  {分類 $c_1$};
-
-%% ── posted_by 邊 ──────────────────────────────
-\draw[-Stealth, draw=authgreen, thick]
-  (v1) -- (a1) node[midway, above, sloped, font=\scriptsize, text=authgreen]
-  {posted\_by};
-\draw[-Stealth, draw=authgreen, thick]
-  (v2) -- (a1);
-\draw[-Stealth, draw=authgreen, thick]
-  (v3) -- (a2) node[midway, below, sloped, font=\scriptsize, text=authgreen]
-  {posted\_by};
-\draw[-Stealth, draw=authgreen, thick]
-  (v4) -- (a2);
-
-%% ── belongs_to 邊 ────────────────────────────
-\draw[-Stealth, draw=catred, thick]
-  (v1) -- (c1) node[midway, below, sloped, font=\scriptsize, text=catred]
-  {belongs\_to};
-\draw[-Stealth, draw=catred, thick]
-  (v3) -- (c1);
-\draw[-Stealth, draw=catred, thick]
-  (v4) -- (c1);
-
-%% ── similar_to 邊（kNN，雙向虛線）────────────
-\draw[<->, dashed, draw=vidblue!70, thick]
-  (v1) -- (v2) node[midway, right, font=\scriptsize, text=vidblue]
-  {similar\_to};
-\draw[<->, dashed, draw=vidblue!70, thick]
-  (v1) -- (v3);
-\draw[<->, dashed, draw=vidblue!70, thick]
-  (v1) -- (v4);
-
-%% ── 新影片連線（kNN） ─────────────────────────
-\draw[-Stealth, draw=vidblue!60, thick, densely dashed]
-  (vnew) -- (v1)
-  node[midway, above, sloped, font=\scriptsize, text=vidblue]
-  {cosine kNN};
-\draw[-Stealth, draw=vidblue!60, thick, densely dashed]
-  (vnew) -- (v2);
-
-%% ── 圖例 ──────────────────────────────────────
-\begin{scope}[shift={(0,-4.5)}]
-\draw[-, draw=authgreen, thick] (0,0) -- (0.8,0)
-  node[right, font=\scriptsize] {posted\_by（影片 $\to$ 作者）};
-\draw[-, draw=catred,    thick] (4.0,0) -- (4.8,0)
-  node[right, font=\scriptsize] {belongs\_to（影片 $\to$ 分類）};
-\draw[<->, dashed, draw=vidblue!70, thick] (8.2,0) -- (9.0,0)
-  node[right, font=\scriptsize] {similar\_to（cosine kNN）};
-\end{scope}
-
-\end{tikzpicture}
-\caption{Pipeline~C 異質圖結構。影片節點（藍色）為中心，透過三種有語義的邊
-連接作者（綠色方框）、分類（紅色菱形）與內容相似的影片。雙向虛線表示 kNN
-的對稱連接；加粗藍框為待預測的全新影片，透過 cosine 相似度連入圖中。}
-\label{fig:hetero_graph}
-\end{figure}
-
-\subsection{節點特徵設計}
-
-\paragraph{影片節點（Video）}
-特徵向量由三部分拼接而成：
-
-\begin{equation}
-\mathbf{x}_v = \bigl[\,\mathbf{f}_{\text{visual}} \;\|\; \mathbf{f}_{\text{text}} \;\|\; \log(1 + d_v)\,\bigr]
-\in \mathbb{R}^{768 + 50 + 1}
-\label{eq:video_feat}
-\end{equation}
-
-其中 $\mathbf{f}_{\text{visual}} \in \mathbb{R}^{768}$ 為 ViT-B/16 抽取的視覺
-表示向量，$\mathbf{f}_{\text{text}} \in \mathbb{R}^{50}$ 為預計算文字嵌入
-（可替換為 SBERT 384 維），$d_v$ 為影片時長（秒）。
-
-\paragraph{作者節點（Author）}
-
-\begin{equation}
-\mathbf{x}_a = \bigl[\,\log(1 + F_a),\; N_a^{\text{train}},\;
-  \bar{y}_{a,1}^{\text{train}},\ldots,\bar{y}_{a,8}^{\text{train}}\,\bigr]
-\in \mathbb{R}^{10}
-\end{equation}
-
-其中 $F_a$ 為粉絲數，$N_a^{\text{train}}$ 為訓練集中該作者的影片數，
-$\bar{y}_{a,k}^{\text{train}}$ 為第 $k$ 個行為指標在訓練集中的均值。
-後者僅統計訓練集內的影片標籤，是防洩漏設計的關鍵。
-
-\paragraph{分類節點（Category）}
-採用可學習嵌入向量，不設置固定數值特徵。模型透過 \texttt{nn.Embedding(51, 128)}
-為每個分類學習一個 128 維的表示。後續改進中可利用三級階層結構（leaf/parent/root）
-分別學習三個嵌入後拼接。
-
-\subsection{邊的設計與 kNN 構建}
+\subsubsection*{資料來源總覽}
 
 \begin{table}[H]
 \centering
-\caption{異質圖邊類型定義}
-\begin{tabular}{llrr}
+\caption{三個資料來源的功能與位置}
+\begin{tabular}{lll}
 \toprule
-\textbf{邊類型} & \textbf{語義} & \textbf{邊數（工作集）} & \textbf{雙向後} \\
+\textbf{來源} & \textbf{內容} & \textbf{位置} \\
 \midrule
-(video, posted\_by, author)   & 影片的創作者 & 54,088 & 108,176 \\
-(video, belongs\_to, category)& 影片的分類   & 54,088 & 108,176 \\
-(video, similar\_to, video)   & cosine kNN, $k=10$ & 540,896 & 942,894\footnotemark \\
+Dropbox A（行為日誌） & interaction.csv + 10 示範影片 & 見下方連結 \\
+Dropbox B（推薦特徵） & image\_feat.npy + text\_feat.npy & 見下方連結 \\
+清華主站（完整版）    & 全部影片 .npy + 文字 + 原始影片 & 帳密見下方 \\
 \bottomrule
 \end{tabular}
 \end{table}
-\footnotetext{kNN 邊非嚴格對稱，$T.ToUndirected()$ 補全後略多於 $2 \times 540896$。}
 
-\textbf{cosine kNN 的純內容性}：$\texttt{similar\_to}$ 邊僅依據視覺特徵
-$\mathbf{f}_{\text{visual}}$ 計算餘弦相似度，完全不使用任何互動標籤或使用者
-資訊，確保此邊在冷啟動時同樣可用：
+\subsubsection*{下載方法（Ubuntu SSH，無需 sudo）}
+
+\begin{lstlisting}[language=bash, caption=推薦預處理特徵（Pipeline C 必要）]
+cd ~/shortvideo_mmgcn_poc
+# Dropbox B：image_feat.npy + text_feat.npy（約 500 MB）
+wget -O /tmp/rec.zip \
+  "https://www.dropbox.com/scl/fo/ha0e0wolgqgg5qskr52l1/AHZUySejwWJzfyJy8WGo2k4\
+?rlkey=xwpqosx7b906yb7g8nwy53oqh&st=slry1d1l&dl=1"
+unzip /tmp/rec.zip -d data_raw/video_rec_dataset/
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, caption=行為日誌 Tiny 版（Pipeline B/C 必要）]
+# Dropbox A：interaction.csv + 示範影片（約 200 MB）
+wget -O /tmp/tiny.zip \
+  "https://www.dropbox.com/scl/fo/5z7pwp6xjkrr1926vreu6/AFYter5C6BDTOCpxkxF0k9Y\
+?rlkey=p28j6u1fl1ubb7bufiq16onbl&st=7aktff85&dl=1"
+unzip /tmp/tiny.zip -d data_raw/shortvideo_tiny/
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, caption=清華主站（完整版，需帳密）]
+# 帳號：videodata   密碼：ShortVideo@10000
+# 下載互動主檔（.csv 無連線數限制）
+wget --user=videodata --password='ShortVideo@10000' -c \
+     -O data_raw/shortvideo_full/interaciton_filtered.csv \
+     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/interaciton_filtered.csv"
+
+# 下載 SBERT 用的標題文字（.txt 無連線數限制）
+wget --user=videodata --password='ShortVideo@10000' -r -np -A "*.txt" \
+     -P data_raw/shortvideo_full/title_en/ \
+     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/title_en/"
+
+# 大型 .npy 檔案（限制 3 個同時連線）
+wget --user=videodata --password='ShortVideo@10000' -c \
+     -O data_raw/shortvideo_full/image_feat.npy \
+     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/image_feat.npy"
+\end{lstlisting}
+
+\begin{tipbox}[最快提升訓練效果的方式（不需要下載）]
+\texttt{interaction.csv} 裡已有中文 \texttt{title} 欄位，可直接用多語言 SBERT 模型
+重抽 384 維文字特徵，替換目前的 50 維舊版本：
+\begin{lstlisting}[language=bash]
+.venv/bin/python scripts/build_hetero_graph.py --use-sbert
+.venv/bin/python scripts/train_hetero.py --model sage --epochs 300
+\end{lstlisting}
+這不需要下載任何新資料，首次執行會自動下載 SBERT 模型（約 400 MB）。
+\end{tipbox}
+
+% ════════════════════════════════════════════════════
+\section{系統設計：三條平行管線}
+\label{sec:system}
+
+本報告同時維護三條研究管線，各自解決不同的問題。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  pipe/.style  ={draw=gray!60, fill=lightbg, rounded corners=8pt,
+                 minimum width=4.0cm, minimum height=8.5cm,
+                 text width=3.7cm, align=center},
+  ptitle/.style={font=\bfseries\small, text=white, rounded corners=4pt,
+                 minimum width=3.6cm, minimum height=0.8cm, align=center},
+  pitem/.style ={font=\footnotesize, text=darktext, align=left, text width=3.4cm}]
+
+\node[pipe] (pA) at (0,0) {};
+\node[ptitle, fill=vidblue!80!black] at (0, 3.5) {Pipeline A};
+\node[pitem] at (0, 2.6) {\textbf{問題}：哪支影片推給誰？};
+\node[pitem] at (0, 1.7) {\textbf{方法}：MMGCN\\（多模態圖推薦）};
+\node[pitem] at (0, 0.8) {\textbf{需要}：使用者歷史互動};
+\node[pitem] at (0,-0.2) {\textbf{圖型}：使用者-影片二部圖};
+\node[pitem] at (0,-1.1) {\textbf{輸出}：個人化影片排名};
+\node[pitem] at (0,-2.2) {\textcolor{red!60!black}{冷啟動：無法處理}};
+
+\node[pipe] (pB) at (5,0) {};
+\node[ptitle, fill=authgreen!80!black] at (5, 3.5) {Pipeline B};
+\node[pitem] at (5, 2.6) {\textbf{問題}：影片平均表現如何？};
+\node[pitem] at (5, 1.7) {\textbf{方法}：LightGBM\\（梯度提升樹）};
+\node[pitem] at (5, 0.8) {\textbf{需要}：影片特徵向量};
+\node[pitem] at (5,-0.2) {\textbf{圖型}：無圖（純表格）};
+\node[pitem] at (5,-1.1) {\textbf{輸出}：8 個互動指標};
+\node[pitem] at (5,-2.2) {\textcolor{hlgold!80!black}{冷啟動：勉強可用}};
+
+\node[pipe] (pC) at (10,0) {};
+\node[ptitle, fill=catred!80!black] at (10, 3.5) {Pipeline C（新）};
+\node[pitem] at (10, 2.6) {\textbf{問題}：新影片表現如何？};
+\node[pitem] at (10, 1.7) {\textbf{方法}：HeteroGNN\\（異質圖神經網路）};
+\node[pitem] at (10, 0.8) {\textbf{需要}：影片內容 + 作者 + 分類};
+\node[pitem] at (10,-0.2) {\textbf{圖型}：影片中心異質圖};
+\node[pitem] at (10,-1.1) {\textbf{輸出}：8 個互動指標};
+\node[pitem] at (10,-2.2) {\textcolor{authgreen!80!black}{冷啟動：主要目標}};
+
+\draw[-Stealth, thick, gray!50] (pA.east) -- (pB.west)
+  node[midway, above, font=\scriptsize, text=gray] {個人→整體};
+\draw[-Stealth, thick, gray!50] (pB.east) -- (pC.west)
+  node[midway, above, font=\scriptsize, text=gray] {無圖→有圖};
+\end{tikzpicture}
+\caption{三條管線的設計定位。Pipeline A 解決個人化推薦，Pipeline B 提供無圖基線，
+Pipeline C 是核心創新，用異質圖在冷啟動場景下預測影片表現。}
+\label{fig:pipeline_overview}
+\end{figure}
+
+% ════════════════════════════════════════════════════
+\section{Pipeline C：為什麼要建圖？}
+\label{sec:why_graph}
+
+\subsection{LightGBM（Pipeline B）的根本限制}
+
+LightGBM 是一棵決策樹的集合，把每支影片的特徵向量（819 個數字）直接對應到
+預測值。它無法知道「這支影片的作者上個月發的其他影片都爆紅了」這類\textbf{關係性信息}，
+因為這個信息不在 819 個數字裡。
+
+\subsection{圖的力量：借用鄰居的信息}
+
+\begin{analogybox}[為什麼建圖有用？——用找房子類比]
+你要估計一間剛上市、完全沒有租賃記錄的公寓的市場表現。
+如果你只看這間公寓本身（幾坪、幾樓、幾個房間），你能得到的信息有限。
+
+但如果你還能看到：
+\begin{itemize}
+\item 這個房東名下的其他公寓出租狀況都怎樣（作者節點的信號）
+\item 同一個社區的其他公寓平均租出幾天（分類節點的信號）
+\item 和這間公寓格局最像的 10 間公寓市場表現（相似影片節點的信號）
+\end{itemize}
+你的估計就會準確多了。GNN 的圖結構就是把這三種「鄰居信息」通道建立起來，
+讓模型可以在訊息傳遞時自動學習如何加權使用這三種信號。
+\end{analogybox}
+
+% ════════════════════════════════════════════════════
+\section{Pipeline C：圖的建構}
+\label{sec:graph}
+
+\subsection{節點設計：圖中有什麼？}
+
+我們的圖有三種類型的節點，每種節點代表不同的實體：
+
+\begin{table}[H]
+\centering
+\caption{三種節點類型、數量與特徵設計}
+\begin{tabular}{llrl}
+\toprule
+\textbf{節點類型} & \textbf{代表} & \textbf{數量} & \textbf{特徵說明} \\
+\midrule
+影片（video）   & 每支影片 & 54,088 & 視覺 768 + 文字 50 + 時長 1 = \textbf{819 維} \\
+作者（author）  & 每位作者 & 34,939 & 粉絲數 + 作品數 + 歷史均值 = \textbf{10 維} \\
+分類（category）& 每個分類 & 51     & 可學習嵌入向量（\textbf{128 維}，隨訓練更新） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{作者特徵的特殊設計（防資料洩漏）}：
+作者的「8 指標歷史均值」只能用訓練集的影片統計，絕對不可以包含驗證集或測試集的數據。
+若違反此規則，模型在評估時就等於「看到了答案」，指標會虛高。
+程式碼中有明確的 assert 確保此規則：
+
+\begin{lstlisting}[language=python]
+# build_hetero_graph.py 中的防洩漏檢查
+def build_author_features(meta_df, vid_attrs, train_mask):
+    train_pids = set(meta_df.loc[train_mask, "pid"])
+    assert used_pids.issubset(train_pids), "洩漏！"
+\end{lstlisting}
+
+\subsection{邊的設計：節點之間如何連接？}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=2.0cm and 2.5cm, scale=0.9]
+\node[vidnode] (v1) at (0, 0)    {影片 $v_1$};
+\node[vidnode] (v2) at (0, 2.2)  {影片 $v_2$};
+\node[vidnode] (v3) at (0,-2.2)  {影片 $v_3$};
+\node[vidnode, draw=vidblue!60, fill=vidblue!30, very thick]
+               (vnew) at (-3.5, 0) {{\bfseries 新影片} $v_?$};
+\node[authnode] (a1) at (5.5, 2.0)  {作者 $a_1$};
+\node[authnode] (a2) at (5.5,-0.5)  {作者 $a_2$};
+\node[catnode]  (c1) at (5.0,-2.8)  {分類 $c_1$};
+
+\draw[-Stealth, draw=authgreen, thick]
+  (v1) -- (a1) node[midway, above, sloped, font=\scriptsize, text=authgreen]
+  {posted\_by（誰拍的）};
+\draw[-Stealth, draw=authgreen, thick] (v2) -- (a1);
+\draw[-Stealth, draw=authgreen, thick]
+  (v3) -- (a2) node[midway, below, sloped, font=\scriptsize, text=authgreen]
+  {posted\_by};
+\draw[-Stealth, draw=catred, thick]
+  (v1) -- (c1) node[midway, below, sloped, font=\scriptsize, text=catred]
+  {belongs\_to（哪個分類）};
+\draw[-Stealth, draw=catred, thick] (v3) -- (c1);
+\draw[<->, dashed, draw=vidblue!70, thick]
+  (v1) -- (v2) node[midway, right, font=\scriptsize, text=vidblue]
+  {similar\_to（視覺相似）};
+\draw[<->, dashed, draw=vidblue!70, thick] (v1) -- (v3);
+\draw[-Stealth, draw=vidblue!60, thick, densely dashed]
+  (vnew) -- (v1) node[midway, above, sloped, font=\scriptsize, text=vidblue]
+  {cosine kNN};
+\draw[-Stealth, draw=vidblue!60, thick, densely dashed]
+  (vnew) to[bend left=15] (v2);
+
+\begin{scope}[shift={(0,-4.8)}]
+\draw[-, draw=authgreen, thick] (0,0)--(0.8,0) node[right, font=\scriptsize] {posted\_by：影片→作者};
+\draw[-, draw=catred, thick]    (4,0)--(4.8,0) node[right, font=\scriptsize] {belongs\_to：影片→分類};
+\draw[<->, dashed, draw=vidblue!70, thick] (8,0)--(8.8,0)
+  node[right, font=\scriptsize] {similar\_to：視覺 cosine kNN};
+\end{scope}
+\end{tikzpicture}
+\caption{異質圖結構。藍色節點是影片，綠色方框是作者，紅色菱形是分類。
+加粗藍框是待預測的全新影片，它透過 cosine 最近鄰連入圖中——即使沒有互動記錄，
+也能從鄰居那裡「借用」信號。}
+\label{fig:hetero_graph}
+\end{figure}
+
+\textbf{cosine kNN 邊的建立方式}：
+找每支影片視覺特徵最相似的 10 支影片，建立雙向邊。
+關鍵限制：\textbf{只用視覺特徵計算相似度}，絕對不用任何行為標籤或互動資料，
+確保這條邊在冷啟動時（新影片也有視覺特徵）同樣可用。
+
+相似度計算公式（余弦相似度）：
+
+$$\text{cosine}(v, v') = \frac{\mathbf{f}_v \cdot \mathbf{f}_{v'}}{\|\mathbf{f}_v\|\,\|\mathbf{f}_{v'}\|}$$
+
+\textbf{白話翻譯}：把每支影片的 768 維特徵想成一個指向某方向的箭頭，
+兩個箭頭越指向同一方向，cosine 值越接近 1，代表視覺風格越相似。
+相似度取前 10 名的影片，連成 kNN 邊。
+
+\subsection{圖的規模}
+
+\begin{table}[H]
+\centering
+\caption{建立後的異質圖統計}
+\begin{tabular}{lrr}
+\toprule
+\textbf{項目} & \textbf{數量} & \textbf{說明} \\
+\midrule
+影片節點 & 54,088 & 含訓練/驗證/測試集 \\
+作者節點 & 34,939 & \\
+分類節點 & 51     & 三級分類體系 \\
+\midrule
+posted\_by 邊（含反向） & 108,176 & 每部影片←→作者 \\
+belongs\_to 邊（含反向）& 108,176 & 每部影片←→分類 \\
+similar\_to 邊（雙向）  & 942,894 & $k=10$ cosine kNN \\
+\textbf{邊的總數} & \textbf{1,159,246} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ════════════════════════════════════════════════════
+\section{Pipeline C：模型架構}
+\label{sec:model}
+
+\subsection{整體設計思路}
+
+整個模型分成三個階段：
+\begin{enumerate}
+\item \textbf{輸入投影}：把三種不同維度的節點特徵，統一投影到同一個 128 維的空間
+\item \textbf{訊息傳遞}：跑 2 層異質圖卷積，每層讓每個節點從鄰居那裡收集信息
+\item \textbf{輸出頭}：只取影片節點的 128 維表示，接一個多層感知機，輸出 8 個指標
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm]
+\node[layerbox] (input) {\textbf{輸入層}\\
+  \footnotesize video.x $[54088 \times 819]$，author.x $[34939 \times 10]$，category embedding};
+\node[layerbox, below=of input] (proj)
+  {\textbf{輸入投影}（統一維度）\\
+  \footnotesize Linear($-1$, 128) 對影片/作者；Embedding(51, 128) 對分類\\
+  → 所有節點都變成 128 維};
+\node[layerbox, below=of proj, draw=vidblue!60, fill=vidblue!8] (conv1)
+  {\textbf{HeteroConv 第 1 層}（1 跳訊息傳遞）\\
+  \footnotesize 每個節點收集所有直接鄰居的 128 維向量，加總後更新自己\\
+  → 影片「知道」作者、分類、相似影片的原始特徵；ReLU + Dropout};
+\node[layerbox, below=of conv1, draw=vidblue!60, fill=vidblue!8] (conv2)
+  {\textbf{HeteroConv 第 2 層}（2 跳訊息傳遞）\\
+  \footnotesize 再收集一次——現在鄰居的向量已包含了它的鄰居的信息\\
+  → 影片的感受野擴展到 2 跳以內的所有節點；ReLU + Dropout};
+\node[layerbox, below=of conv2, draw=catred!60, fill=catred!8] (head)
+  {\textbf{輸出頭（只取影片節點）}\\
+  \footnotesize $\mathbf{h}_v^{(2)}$ [128 維] → Linear(128,64) → ReLU → Linear(64,8)};
+
+\draw[arrowstyle] (input) -- (proj);
+\draw[arrowstyle] (proj)  -- (conv1);
+\draw[arrowstyle] (conv1) -- (conv2);
+\draw[arrowstyle] (conv2) -- (head);
+
+\node[draw=authgreen, fill=authgreen!10, rounded corners=3pt,
+      font=\scriptsize, right=0.3cm of proj, text width=3cm, align=left]
+  {參數總量：\\450,632 個\\（在 RTX 4090 上\\約 2 MB 顯存）};
+\end{tikzpicture}
+\caption{HeteroGNN 完整模型架構。輸入投影將各種節點統一到 128 維，
+兩層 HeteroConv 逐步擴大感受野，最後只在影片節點上接多任務輸出頭。}
+\label{fig:arch}
+\end{figure}
+
+\subsection{訊息傳遞的數學表達}
+
+一層異質圖卷積的更新公式：
 
 \begin{equation}
-E_{\text{kNN}} = \bigl\{\,(v, v') \;\big|\; v' \in \operatorname*{argmax}_{k}
-\frac{\mathbf{f}_v \cdot \mathbf{f}_{v'}}{\|\mathbf{f}_v\|\|\mathbf{f}_{v'}\|},\;
-v' \neq v \,\bigr\}
+\mathbf{h}_v^{(\ell+1)} = \sigma\!\Biggl(\;
+\sum_{\text{邊類型}\; r} \;\mathbf{W}_r^{(\ell)} \cdot
+\underbrace{\frac{1}{|\mathcal{N}_r(v)|}
+  \sum_{u \in \mathcal{N}_r(v)} \mathbf{h}_u^{(\ell)}}_{\text{關係 $r$ 下的鄰域平均}}
+\;\Biggr)
+\label{eq:hetero_msg}
 \end{equation}
 
-\subsection{防資料洩漏機制}
+\textbf{每個符號的白話解釋}：
+\begin{itemize}
+\item $\mathbf{h}_v^{(\ell)}$：第 $\ell$ 層後，節點 $v$（某支影片）的 128 維特徵向量
+\item $r$：邊的類型（posted\_by / belongs\_to / similar\_to 及其反向邊）
+\item $\mathcal{N}_r(v)$：在關係 $r$ 下，$v$ 的鄰居集合（例如 $r = \text{posted\_by}$ 時，$\mathcal{N}_r(v)$ 就是這支影片的作者）
+\item $\mathbf{W}_r^{(\ell)}$：關係 $r$ 的可學習投影矩陣——模型訓練時自動學習「作者信號」比「分類信號」在哪些情況下更重要
+\item $\sigma$：ReLU 激活函數（讓模型學到非線性關係）
+\end{itemize}
+
+\textbf{整句白話翻譯}：「對影片 $v$，對每種鄰居關係，把那種關係下的所有鄰居特徵平均，然後用該關係專屬的投影矩陣轉換，最後把所有關係的結果加起來，通過 ReLU，得到下一層的特徵。」
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.90]
+\node[vidnode, draw=vidblue!30, fill=gray!10] (s1) at (0, 3.8) {相似影片 $v_1$};
+\node[vidnode, draw=vidblue!30, fill=gray!10] (s2) at (0, 2.2) {相似影片 $v_2$};
+\node[authnode, draw=authgreen!40, fill=gray!10] (au) at (0, 0.5) {作者 $a$};
+\node[catnode,  draw=catred!40,   fill=gray!10] (ca) at (0,-1.2) {分類 $c$};
+
+\node[font=\scriptsize, right=0.05cm of s1, text=gray] {h$^{(0)}$：視覺特徵};
+\node[font=\scriptsize, right=0.05cm of au, text=gray] {h$^{(0)}$：作者歷史均值};
+\node[font=\scriptsize, right=0.05cm of ca, text=gray] {h$^{(0)}$：分類嵌入};
+
+\node[vidnode, very thick, fill=vidblue!25] (v1) at (5.5, 1.5)
+  {新影片 $v_?$\\\small $\mathbf{h}^{(1)}$};
+
+\draw[-Stealth, thick, draw=vidblue!70, dashed] (s1.east) -- (v1.west)
+  node[midway, above, sloped, font=\scriptsize, text=vidblue] {similar\_to};
+\draw[-Stealth, thick, draw=vidblue!70, dashed] (s2.east) -- (v1.west);
+\draw[-Stealth, thick, draw=authgreen] (au.east) -- (v1.west)
+  node[midway, below, sloped, font=\scriptsize, text=authgreen] {posted\_by};
+\draw[-Stealth, thick, draw=catred] (ca.east) -- (v1.west)
+  node[midway, below, sloped, font=\scriptsize, text=catred] {belongs\_to};
+
+\node[vidnode, very thick, fill=vidblue!45] (v2) at (5.5,-0.5)
+  {新影片 $v_?$\\\small $\mathbf{h}^{(2)}$（2 跳）};
+\draw[arrowstyle, very thick] (v1) -- (v2)
+  node[midway, right, font=\scriptsize, text=gray] {Layer 2\\再聚合一次};
+
+\node[draw=hlgold!80, fill=hlgold!15, rounded corners=3pt,
+      font=\small, align=center, minimum width=2.5cm] (out) at (5.5,-2.5)
+  {MLP → 8 個指標};
+\draw[arrowstyle] (v2) -- (out);
+
+\node[draw=gray!30, fill=gray!5, rounded corners=3pt,
+      text width=4.5cm, font=\scriptsize, align=left] at (10, 1.2)
+  {\textbf{冷啟動場景：}\\[3pt]
+   新影片沒有任何互動記錄，\\但它依然能收集信號：\\[3pt]
+   \textcolor{vidblue}{$\bullet$ 相似影片}的歷史表現\\
+   \textcolor{authgreen}{$\bullet$ 作者}的過去作品均值\\
+   \textcolor{catred}{$\bullet$ 分類}的整體基準\\[3pt]
+   不需要任何使用者互動。};
+\end{tikzpicture}
+\caption{冷啟動場景的訊息傳遞示意。全新影片 $v_?$ 沒有互動記錄，但透過三種邊
+從圖的鄰居收集信號，兩層後已融合了 2 跳鄰域的資訊，最後通過 MLP 輸出預測。}
+\label{fig:msgpass}
+\end{figure}
+
+\subsection{兩種訊息傳遞變體}
+
+我們提供兩種可切換的訊息傳遞層：
+
+\begin{table}[H]
+\centering
+\caption{GraphSAGE（預設）vs HGT（消融用）}
+\begin{tabular}{lll}
+\toprule
+\textbf{面向} & \textbf{GraphSAGE（--model sage）} & \textbf{HGT（--model hgt）} \\
+\midrule
+聚合方式 & 鄰域平均（簡單直接） & 注意力加權（讓模型決定聽誰的）\\
+直覺解釋 & 「等量採納所有鄰居意見」 & 「根據內容決定聽哪個鄰居的話」\\
+泛化能力 & 強（推薦用於冷啟動） & 中等 \\
+計算成本 & 低 & 高（4 個注意力頭）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{注意力機制（HGT 的核心）白話解釋}：
+普通 GNN 對所有鄰居一視同仁，把它們的特徵平均起來。
+加了注意力機制後，模型會學習「對這支影片來說，作者的信號比分類的信號更重要」，
+對每個鄰居給予不同的權重，讓不同情況下的信息融合更有彈性。
+
+% ════════════════════════════════════════════════════
+\section{訓練設計}
+\label{sec:training}
+
+\subsection{為什麼要「加權」訓練？}
+
+同樣是「按讚率 5\%」，一支被 1000 人看過的影片的統計比一支只被 10 人看過的影片要可靠多了。
+後者可能純屬巧合。因此訓練時，每支影片的貢獻正比於它的曝光次數：
+
+$$w_v = \frac{n_v}{\sum_{u \in \text{訓練集}} n_u} \qquad (\text{n\_impressions 歸一化})$$
+
+\subsection{多任務損失函數}
+
+8 個目標同時訓練，損失函數分兩部分：
+
+\begin{equation}
+\mathcal{L} = \sum_{v \in \text{訓練集}} w_v \Biggl[
+  \underbrace{\sum_{k=0}^{6}\bigl(\hat{y}_{v,k} - y_{v,k}\bigr)^2}_{\text{7 個 rate 指標用 MSE}}
+  \;+\;
+  \underbrace{\text{Huber}\!\bigl(\hat{y}_{v,7},\,\log(1+y_{v,7});\,\delta{=}1.0\bigr)}_{\text{觀看時長用 Huber（更穩健）}}
+\Biggr]
+\end{equation}
+
+\textbf{為什麼觀看時長用 Huber 損失而不是 MSE？}
+
+觀看時長的分佈非常偏斜：大部分人看不到 30 秒，但有少數影片被看了好幾分鐘。
+MSE 對「極端值」的懲罰非常大（誤差平方），一兩個極端樣本就會主導整個訓練。
+Huber 損失在誤差小的時候用平方（精確），在誤差大的時候改用線性（不被極端值帶跑），
+兼顧了穩定性和準確性。
+
+\textbf{為什麼觀看時長要先取對數？}
+同樣的道理：直接對秒數訓練，500 秒和 5 秒的差距（495 秒）會把差距很小的
+5 秒和 10 秒（5 秒）完全淹沒。取 $\log(1 + t)$ 後，這個比例差異被壓縮成相近的數值，
+讓模型對各種時長範圍都能均等地學習。
+
+\subsection{資料切分與防洩漏設計}
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[scale=0.9]
-
-%% 資料集長條
-\fill[vidblue!20, rounded corners=4pt]
-  (0,0) rectangle (10.5, 1.2);
-\node[font=\small] at (5.25, 0.6)
-  {全部 54,088 部影片（工作集）};
-
-%% 切分
-\fill[vidblue!50, rounded corners=3pt]
-  (0.1, 0.1) rectangle (8.4, 1.1);
+\fill[vidblue!20, rounded corners=4pt] (0,0) rectangle (10.5, 1.2);
+\node[font=\small] at (5.25, 0.6) {全部 54,088 部影片（工作集）};
+\fill[vidblue!50, rounded corners=3pt] (0.1, 0.1) rectangle (8.4, 1.1);
 \node[font=\footnotesize, text=white] at (4.25, 0.6) {訓練集 43,270（80\%）};
-
-\fill[authgreen!50, rounded corners=3pt]
-  (8.5, 0.1) rectangle (9.45, 1.1);
-\node[font=\scriptsize, text=white] at (8.98, 0.6) {驗\\ 5,408};
-
-\fill[catred!50, rounded corners=3pt]
-  (9.55, 0.1) rectangle (10.4, 1.1);
-\node[font=\scriptsize, text=white] at (9.98, 0.6) {測\\ 5,410};
-
-%% 防洩漏屏障
-\draw[red!70!black, very thick, dashed]
-  (8.45, -0.3) -- (8.45, 2.8)
-  node[above, font=\small, text=red!70!black] {洩漏屏障};
-
-%% 作者統計僅使用訓練集
+\fill[authgreen!50, rounded corners=3pt] (8.5, 0.1) rectangle (9.45, 1.1);
+\node[font=\scriptsize, text=white] at (8.97, 0.6) {驗\\5,408};
+\fill[catred!50, rounded corners=3pt] (9.55, 0.1) rectangle (10.4, 1.1);
+\node[font=\scriptsize, text=white] at (9.97, 0.6) {測\\5,410};
+\draw[red!70!black, very thick, dashed] (8.45,-0.4) -- (8.45, 3.0)
+  node[above, font=\small, text=red!70!black] {標籤洩漏屏障};
 \node[draw=authgreen, fill=authgreen!10, rounded corners=4pt,
-      text width=5cm, align=center, font=\small]
-  (astat) at (4.25, 2.3)
-  {\textbf{作者統計特徵}\\僅對訓練集影片計算\\均值、計數};
-
+      text width=5cm, align=center, font=\small] (astat) at (4.25, 2.2)
+  {作者歷史統計\\僅用訓練集影片計算};
 \draw[-Stealth, authgreen, thick] (4.25, 1.2) -- (astat.south);
-
-%% 禁止符號
-\node[font=\Large, text=red!70!black] at (9.2, 2.3) {$\times$};
-\node[font=\small, text=red!70!black] at (9.2, 1.8) {禁止};
-
-%% assert 說明
-\node[draw=gray!50, fill=gray!5, rounded corners=3pt,
-      text width=3.5cm, align=center, font=\scriptsize]
-  at (4.25, -1.0)
-  {\texttt{assert used\_pids}\\
-   \texttt{.issubset(train\_pids)}\\
-   程式碼保證覆蓋率 = 100\%};
-
+\node[font=\Large, text=red!70!black] at (9.2, 2.2) {$\times$};
+\node[font=\small, text=red!70!black, align=center] at (9.2, 1.8) {禁止};
+\node[draw=gray!40, fill=gray!5, rounded corners=3pt,
+      text width=4cm, font=\scriptsize, align=center] at (4.25,-1.2)
+  {程式碼 assert 確保覆蓋率 = 100\%\\建圖時印出確認訊息};
 \end{tikzpicture}
-\caption{資料切分與防洩漏設計。作者的歷史統計特徵嚴格限定在訓練集影片範圍內
-計算，程式碼中以 \texttt{assert} 明確驗證，確保驗證集與測試集的標籤在任何
-特徵工程路徑中均不可見。}
+\caption{80/10/10 資料切分與防洩漏屏障。作者的歷史統計特徵嚴格限定在訓練集範圍內，
+程式碼中以 assert 明確驗證，確保評估時不存在資訊洩漏。}
 \label{fig:leakage}
 \end{figure}
 
-%% ════════════════════════════════════════════════════════════
-\section{Pipeline C：模型架構}
-\label{sec:model}
-
-\subsection{整體架構}
-
-模型由三個串接的模組組成：輸入投影層、兩層異質訊息傳遞層、
-以及僅作用於影片節點的多任務輸出頭。
-
-%% ────────────────────────────────────────────────────────────
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  node distance=0.6cm and 0.3cm,
-  box/.style={draw=gray!60, fill=lightbg, rounded corners=5pt,
-              minimum width=5.5cm, minimum height=0.85cm,
-              font=\small, align=center, text=darktext},
-  typebox/.style={draw=gray!40, fill=white, rounded corners=3pt,
-                  minimum width=1.6cm, minimum height=0.65cm,
-                  font=\footnotesize, align=center},
-  outb/.style={draw=gray!50, fill=yellow!8, rounded corners=4pt,
-               minimum width=1.1cm, minimum height=0.65cm,
-               font=\scriptsize, align=center},
-]
-
-%% ── 輸入層 ────────────────────────────────────
-\node[box] (input) {%
-  \textbf{輸入層（Input）}\\
-  \footnotesize video.x $[N_v, 819]$\quad
-  author.x $[N_a, 10]$\quad
-  category.Embedding};
-
-%% ── 投影層 ────────────────────────────────────
-\node[box, below=of input] (proj) {%
-  \textbf{輸入投影（Projection）}\\
-  \footnotesize $\text{Linear}({-1}, 128)$ 對 video/author；
-  $\text{Embedding}(51, 128)$ 對 category\\
-  輸出：所有節點均為 128 維};
-
-%% ── HeteroConv Layer 1 ───────────────────────
-\node[box, below=of proj, draw=vidblue!60, fill=vidblue!8] (conv1) {%
-  \textbf{HeteroConv Layer 1}\\
-  \footnotesize \{edge\_type : SAGEConv$({-1},{-1}$, 128)\} $\times$ 5 邊類型\\
-  aggr=`sum'；ReLU + Dropout($p=0.1$)};
-
-%% ── HeteroConv Layer 2 ───────────────────────
-\node[box, below=of conv1, draw=vidblue!60, fill=vidblue!8] (conv2) {%
-  \textbf{HeteroConv Layer 2}\\
-  \footnotesize 同上，訊息聚合的感受野擴張至 2 跳鄰域；ReLU + Dropout};
-
-%% ── 取 video 節點 ────────────────────────────
-\node[box, below=of conv2, draw=catred!60, fill=catred!8] (readout) {%
-  \textbf{Readout（僅取影片節點）}\\
-  \footnotesize $h_v^{(2)} \in \mathbb{R}^{128}$ → Linear(128,64) → ReLU → Linear(64,8)};
-
-%% ── 輸出 ─────────────────────────────────────
-\node[outb, below left=0.5cm and -1.5cm of readout]  (out1)
-  {$\sigma(\cdot)$\\\scriptsize 7 個 rate\\$\in(0,1)$};
-\node[outb, below right=0.5cm and -1.5cm of readout] (out2)
-  {linear\\\scriptsize $\log(1{+}t_v)$\\\scriptsize watch\_time};
-
-%% ── 連線 ─────────────────────────────────────
-\draw[arrowstyle] (input)   -- (proj);
-\draw[arrowstyle] (proj)    -- (conv1);
-\draw[arrowstyle] (conv1)   -- (conv2);
-\draw[arrowstyle] (conv2)   -- (readout);
-\draw[arrowstyle] (readout.south) -- ++(0,-0.3) -| (out1.north);
-\draw[arrowstyle] (readout.south) -- ++(0,-0.3) -| (out2.north);
-
-%% ── 右側標注 ─────────────────────────────────
-\node[right=0.3cm of input,  font=\scriptsize, text=gray] {維度變換};
-\node[right=0.3cm of proj,   font=\scriptsize, text=gray] {→ 各 128 維};
-\node[right=0.3cm of conv1,  font=\scriptsize, text=gray] {1 跳鄰域};
-\node[right=0.3cm of conv2,  font=\scriptsize, text=gray] {2 跳鄰域};
-\node[right=0.3cm of readout,font=\scriptsize, text=gray] {影片專用};
-
-\end{tikzpicture}
-\caption{HeteroGNN 模型架構圖。輸入投影將不同維度的節點特徵統一到 128 維後，
-通過兩層異質圖卷積聚合多跳鄰域資訊，最終在影片節點上接多任務輸出頭，
-輸出 7 個率指標（sigmoid）與觀看時長（線性，對數空間）。}
-\label{fig:arch}
-\end{figure}
-
-\subsection{訊息傳遞機制}
-
-以 GraphSAGE 聚合為例，第 $\ell$ 層的更新公式為：
-
-\begin{equation}
-\mathbf{h}_v^{(\ell+1)} = \sigma\!\Biggl(\,
-\sum_{r \in \mathcal{R}} \mathbf{W}_r^{(\ell)} \cdot
-\underbrace{\operatorname{AGG}\!\bigl\{\mathbf{h}_u^{(\ell)} \;\big|\; u \in \mathcal{N}_r(v)\bigr\}}_{\text{關係 $r$ 下鄰域的聚合結果}}
-\Biggr)
-\label{eq:hetero_msg}
-\end{equation}
-
-其中 $\mathcal{R} = \{\texttt{posted\_by}, \texttt{belongs\_to},
-\texttt{similar\_to}, \texttt{rev\_posted\_by}, \texttt{rev\_belongs\_to}\}$
-為五種邊類型（含 \texttt{T.ToUndirected()} 生成的反向邊），
-$\mathbf{W}_r^{(\ell)}$ 是關係 $r$ 在第 $\ell$ 層的可學習投影矩陣，
-$\sigma$ 為 ReLU 激活函數。
-
-%% ────────────────────────────────────────────────────────────
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[scale=0.92, node distance=1.8cm and 2.0cm]
-
-%% ── 第 0 層（原始特徵）─────────────────────────────
-\node[vidnode, draw=vidblue!30, fill=gray!10] (s1) at (0, 3.5)
-  {$v_1$ 相似影片};
-\node[vidnode, draw=vidblue!30, fill=gray!10] (s2) at (0, 1.8)
-  {$v_2$ 相似影片};
-\node[authnode, draw=authgreen!40, fill=gray!10] (au) at (0, 0)
-  {$a$ 作者節點};
-\node[catnode,  draw=catred!40,   fill=gray!10] (ca) at (0,-1.8)
-  {$c$ 分類節點};
-
-%% ── 新影片（0 跳，原始特徵）───────────────────────
-\node[vidnode, very thick] (v0) at (4.5, 1.0) {新影片 $v_?$\\\scriptsize Layer 0};
-
-%% ── 第 1 層（1 跳聚合）─────────────────────────────
-\node[vidnode, very thick, fill=vidblue!25] (v1) at (4.5,-0.8)
-  {\textbf{$h_{v_?}^{(1)}$}\\\scriptsize Layer 1};
-
-\draw[msgedge] (s1.east) -- (v1.west)
-  node[midway, above, sloped, font=\scriptsize, text=vidblue]
-  {similar\_to};
-\draw[msgedge] (s2.east) -- (v1.west);
-\draw[-Stealth, thick, draw=authgreen] (au.east) -- (v1.west)
-  node[midway, below, sloped, font=\scriptsize, text=authgreen]
-  {posted\_by};
-\draw[-Stealth, thick, draw=catred] (ca.east) -- (v1.west)
-  node[midway, below, sloped, font=\scriptsize, text=catred]
-  {belongs\_to};
-
-%% ── 第 2 層（2 跳聚合）─────────────────────────────
-\node[vidnode, very thick, fill=vidblue!45] (v2) at (4.5,-2.8)
-  {\textbf{$h_{v_?}^{(2)}$}\\\scriptsize Layer 2};
-\draw[arrowstyle, very thick] (v1) -- (v2)
-  node[midway, right, font=\scriptsize, text=gray] {再聚合 2 跳};
-
-%% ── 輸出頭 ─────────────────────────────────────────
-\node[draw=hlgold!80, fill=hlgold!10, rounded corners=4pt,
-      font=\small, align=center, minimum width=2.2cm]
-  (out) at (4.5,-4.5) {MLP → 8 個指標};
-\draw[arrowstyle] (v2) -- (out);
-
-%% ── 標注 ────────────────────────────────────────────
-\node[right=0.1cm of s1, font=\scriptsize, text=gray] {h$^{(0)}$ = 視覺內容特徵};
-\node[right=0.1cm of au, font=\scriptsize, text=gray] {h$^{(0)}$ = 作者歷史統計};
-\node[right=0.1cm of ca, font=\scriptsize, text=gray] {h$^{(0)}$ = 分類嵌入向量};
-
-%% 圖例說明
-\node[draw=gray!30, fill=gray!5, rounded corners=3pt,
-      text width=5cm, font=\scriptsize, align=left]
-  at (9.5, 0.8)
-  {\textbf{冷啟動場景下的信號來源：}\\[2pt]
-   \textcolor{vidblue}{$\bullet$ 內容相似影片}：cosine kNN\\
-   \textcolor{authgreen}{$\bullet$ 作者節點}：歷史均值（訓練集）\\
-   \textcolor{catred}{$\bullet$ 分類節點}：類別基準（嵌入學習）\\[4pt]
-   無需任何使用者互動資料};
-
-\end{tikzpicture}
-\caption{冷啟動場景下的兩層訊息傳遞示意。全新影片 $v_?$（零互動）透過三種邊
-從鄰居收集信號：Layer~1 聚合直接鄰居，Layer~2 進一步融合 2 跳鄰域，
-最終透過 MLP 輸出 8 個行為指標預測值。}
-\label{fig:msgpass}
-\end{figure}
-
-\subsection{兩種模型變體}
-
-\begin{table}[H]
-\centering
-\caption{GraphSAGE 與 HGT 兩種訊息傳遞變體的對比}
-\begin{tabular}{lll}
-\toprule
-\textbf{面向} & \textbf{SAGE（預設）} & \textbf{HGT（消融實驗）} \\
-\midrule
-聚合方式     & 鄰域取樣 + 均值聚合（mean） & 多頭注意力（4 heads） \\
-邊類型處理   & 各關係獨立投影矩陣 $\mathbf{W}_r$ & 各關係獨立 Q/K/V 投影 \\
-歸納能力     & 強（inductive，可泛化至新節點） & 中（依賴訓練圖的 metadata）\\
-計算複雜度   & $O(|\mathcal{E}|)$ & $O(|\mathcal{E}| \cdot H)$，$H$ 為頭數 \\
-冷啟動適配性 & 優（推薦主用）& 次優（消融對比）\\
-參數量       & 450,632                        & 顯著更大 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-%% ════════════════════════════════════════════════════════════
-\section{Pipeline C：訓練策略}
-\label{sec:training}
-
-\subsection{曝光加權多任務損失}
-
-令 $\hat{\mathbf{y}}_v \in \mathbb{R}^8$ 為影片 $v$ 的預測向量，
-$\mathbf{y}_v$ 為真實標籤，$w_v = n_v / \sum_{u \in \mathcal{T}} n_u$
-為歸一化曝光次數權重（$n_v$ 為曝光次數，$\mathcal{T}$ 為訓練集）。
-
-總損失函數為：
-
-\begin{equation}
-\mathcal{L} = \sum_{v \in \mathcal{T}} w_v \Biggl[
-  \underbrace{\sum_{k=0}^{6} \bigl(\hat{y}_{v,k} - y_{v,k}\bigr)^2}_{\text{7 個 rate 指標 MSE}}
-  +
-  \underbrace{\text{Huber}\bigl(\hat{y}_{v,7},\, \log(1 + y_{v,7});\, \delta=1.0\bigr)}_{\text{觀看時長 Huber（對數空間）}}
-\Biggr]
-\label{eq:loss}
-\end{equation}
-
-\textbf{Huber 損失的選擇}：觀看時長在原始空間中分佈高度偏斜（最大值 545 秒 vs 中位數 22 秒），
-直接使用均方誤差對極端值過於敏感。取 $\log(1 + y_{v,7})$ 後再施以 Huber 損失（$\delta=1.0$），
-在線性與平方懲罰之間自動切換，兼顧魯棒性與準確性。
-
-\textbf{曝光加權的必要性}：曝光次數越多，該影片的行為統計越穩定、標籤越可靠。
-使用 $w_v$ 加權，使訓練訊號正比於標籤可信度，與 Pipeline~B 的設計一致。
-
-\subsection{訓練流程與超參數}
-
-\begin{table}[H]
-\centering
-\caption{Pipeline~C 主要訓練超參數}
-\begin{tabular}{lll}
-\toprule
-\textbf{超參數} & \textbf{預設值} & \textbf{說明} \\
-\midrule
-隱藏維度 $d$   & 128         & 所有節點在訊息傳遞層的統一維度 \\
-GNN 層數       & 2           & 對應 2 跳有效感受野 \\
-最大訓練回合   & 300         & 實際以早停為準 \\
-早停輪數       & 50          & 監控驗證集損失 \\
-優化器         & AdamW       & 權重衰減 $10^{-4}$ \\
-初始學習率     & $10^{-3}$   & ReduceLROnPlateau 動態調整 \\
-Dropout 率     & 0.1         & Conv 層後及 MLP 頭中 \\
-隨機種子       & 42          & 切分與模型初始化皆固定 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{轉導設定（Transductive）}
-
-Pipeline~C 採用標準的轉導設定：整張圖（包含驗證集與測試集節點的\textbf{特徵}）
-同時參與前向傳播，但損失函數僅對訓練集遮罩（\texttt{train\_mask}）的節點
-回傳梯度。驗證集與測試集節點的\textbf{標籤}在整個訓練過程中完全不可見。
-
-此設定允許模型在訊息傳遞過程中「看到」圖中所有節點的特徵，但推理的準確性
-不依賴任何未來的互動標籤，保持了評估的公平性。
-
-%% ════════════════════════════════════════════════════════════
-\section{實驗結果與分析}
+% ════════════════════════════════════════════════════
+\section{實驗結果}
 \label{sec:exp}
 
-\subsection{評估設定}
+\subsection{實驗設定}
 
 \begin{itemize}
-\item \textbf{資料切分}：80/10/10 隨機切分，seed=42，與 Pipeline~B 的 LightGBM 完全一致，確保公平比較。
-\item \textbf{評估指標}（每個目標獨立計算）：
-  \begin{itemize}
-  \item \textbf{MAE / RMSE}：絕對誤差，反映絕對預測精度；
-  \item \textbf{Spearman}：排名相關係數，反映模型的\textbf{排序能力}（最適合推薦場景）；
-  \item \textbf{nDCG@10}：以真實值為相關度、以預測值排序後計算前 10 名品質；
-  \item \textbf{AUC@median}：以中位數為門檻做二元分類的 AUC。
-  \end{itemize}
-\item \textbf{訓練環境}：macOS CPU（Apple Silicon），早停於第 66 回合。
+\item 資料切分：80/10/10，seed=42（與 Pipeline B LightGBM 完全一致，保證公平比較）
+\item 訓練環境：Ubuntu 24.04，NVIDIA RTX 4090（24 GB VRAM），PyTorch 2.6.0+cu124
+\item 早停：監控驗證集損失，patience=50
+\item 最終評估：使用最佳驗證 checkpoint 在測試集評估
 \end{itemize}
 
-\subsection{主要結果}
+\subsection{GPU 訓練加速效果}
 
 \begin{table}[H]
 \centering
-\caption{Pipeline~C（HeteroGNN SAGE）與 Pipeline~B（LightGBM）在測試集的對比}
+\caption{CPU 與 GPU 訓練結果對比（seed=42，SAGE 模型）}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{環境} & \textbf{早停 epoch} & \textbf{訓練時間} & \multicolumn{2}{c}{\textbf{mean\_watch\_time}} \\
+\cmidrule(lr){4-5}
+& & & Spearman & MAE（秒）\\
+\midrule
+macOS CPU（Apple M 系列） & 66 & 47 秒 & 0.251 & 505 \\
+Ubuntu RTX 4090 & 68 & \textbf{1 秒} & \textbf{0.256} & \textbf{386} \\
+\midrule
+加速比 & — & \textbf{47×} & $\uparrow$ 2\% & $\uparrow$ 24\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{主要指標對比（GPU 訓練結果）}
+
+\begin{table}[H]
+\centering
+\caption{Pipeline C HeteroGNN vs Pipeline B LightGBM（測試集，GPU 結果）}
 \label{tab:results}
 \begin{tabular}{lrrrr}
 \toprule
-& \multicolumn{2}{c}{\textbf{Spearman 相關係數}}
-& \multicolumn{2}{c}{\textbf{MAE}} \\
+& \multicolumn{2}{c}{\textbf{Spearman（越高越好）}}
+& \multicolumn{2}{c}{\textbf{MAE（越低越好）}} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 \textbf{指標} & \textbf{HeteroGNN} & \textbf{LightGBM}
               & \textbf{HeteroGNN} & \textbf{LightGBM} \\
 \midrule
-\texttt{like\_rate}            & $-0.034$ & $-0.001$ & $0.066$ & $0.044$ \\
-\texttt{comment\_rate}         & $+0.016$ & $-0.003$ & $0.045$ & $0.009$ \\
-\texttt{follow\_rate}          & $-0.040$ & $-0.009$ & $0.040$ & $0.008$ \\
-\texttt{collect\_rate}         & $-0.003$ & $-0.035$ & $0.070$ & $0.013$ \\
-\texttt{forward\_rate}         & $-0.011$ & $-0.012$ & $0.081$ & $0.005$ \\
-\texttt{hate\_rate}            & $+0.018$ & $-0.014$ & $0.031$ & $0.002$ \\
-\texttt{effective\_view\_rate} & $-0.010$ & $+0.016$ & $0.152$ & $0.143$ \\
-\texttt{mean\_watch\_time}     & $\mathbf{+0.251}$ & $+0.047$
-                               & $505$ 秒  & $24$ 秒 \\
+\texttt{like\_rate}            & $-0.032$ & $-0.001$ & $0.058$ & $0.044$ \\
+\texttt{comment\_rate}         & $+0.012$ & $-0.003$ & $0.039$ & $0.009$ \\
+\texttt{follow\_rate}          & $-0.031$ & $-0.009$ & $0.024$ & $0.008$ \\
+\texttt{collect\_rate}         & $+0.011$ & $-0.035$ & $0.074$ & $0.013$ \\
+\texttt{forward\_rate}         & $-0.005$ & $-0.012$ & $0.066$ & $0.005$ \\
+\texttt{hate\_rate}            & $+0.019$ & $-0.014$ & $0.029$ & $0.002$ \\
+\texttt{effective\_view\_rate} & $-0.012$ & $+0.016$ & $0.169$ & $0.143$ \\
+\texttt{mean\_watch\_time}     & $\mathbf{+0.256}$ & $+0.047$ & $386$ 秒 & $24$ 秒 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{結果解讀}
 
-\paragraph{觀看時長：圖結構驗證有效}
-\texttt{mean\_watch\_time} 的 Spearman 由 LightGBM 的 $0.047$ 提升至 HeteroGNN 的
-$\mathbf{0.251}$，提升幅度超過 4 倍。這一結果與理論預期一致：觀看時長是最直接
-受影片內容品質驅動的指標，圖神經網路透過 $\texttt{similar\_to}$ 邊，有效地將
-風格相近影片的觀看時長信號傳遞給目標影片。
+\begin{tipbox}[最重要的發現]
+\textbf{mean\_watch\_time 的排名能力提升 4 倍以上}：Spearman $0.047 \to 0.256$。
+這驗證了本報告的核心假設：圖結構確實能有效傳遞「相似影片的觀看時長信號」。
+\end{tipbox}
 
-值得注意的是，HeteroGNN 的觀看時長 MAE 顯著高於 LightGBM（505 秒 vs 24 秒），
-這反映了二者在\textbf{排序能力}與\textbf{絕對精度}上的差異：
-GNN 在排名上表現更好，但絕對值的校準尚不充分，這在當前只訓練 66 個回合的設置下是預期的。
+\paragraph{觀看時長：圖結構有效}
+觀看時長是最受影片「內容本身」影響的指標——有趣的影片讓你多看幾秒，無聊的讓你提前划走。
+GNN 透過 \texttt{similar\_to} 邊，把「視覺風格相似的老影片的觀看時長」傳給新影片，
+這個信號是 LightGBM 看不到的。
 
-\paragraph{Rate 指標：兩種模型均接近隨機}
-6 個 rate 指標的 Spearman 接近零，這不是模型失效，而是資料本身的特性：
-中位數為零意味著排名的「真實信號」幾乎全來自極少數高互動影片，
-從純內容特徵預測這種「隨機爆紅效應」是公認的困難問題
-（參見 MMVED~\citet{xie2020mmved} 的同類討論）。
+\paragraph{Rate 指標：兩個模型都接近隨機}
+按讚、留言、轉發等 rate 的中位數是 0，意味著絕大多數影片根本沒人互動。
+「哪支影片會爆紅」有很強的隨機性和社群動態（例如一個大號轉發就能帶動流量），
+純從影片內容預測這種「社群爆紅效應」是學術界公認的困難問題。
+兩個模型的 Spearman 接近 0 是正常且預期的結果。
 
-%% ════════════════════════════════════════════════════════════
+\paragraph{MAE 的矛盾：排名好但絕對值差}
+HeteroGNN 的觀看時長 MAE（386 秒）遠高於 LightGBM（24 秒），
+但 Spearman（0.256）遠優於 LightGBM（0.047）。
+這意味著：GNN 能夠正確排序「哪支影片會被看更久」，但絕對的預測秒數還需要更多訓練和校準。
+對推薦系統應用來說，\textbf{排名能力（Spearman）比絕對精度（MAE）更重要}。
+
+% ════════════════════════════════════════════════════
 \section{未來工作}
 \label{sec:future}
 
-根據當前實作的局限性，我們按優先順序列出改進方向：
+按優先順序排列：
 
-\subsection{高優先：正確性補全}
+\subsection*{高優先：補齊功能缺口}
 
-\subsubsection{冷啟動推論的精確節點對齊}
+\paragraph{1. 冷啟動推論的精確節點對應}
+當前 \texttt{predict\_hetero.py from-raw} 模式若提供 \texttt{--author-id}，
+因建圖時的對應字典沒有持久化，只能退回 kNN fallback。
+需額外儲存 \texttt{hetero\_graph\_meta.pkl} 包含作者和分類的本地索引字典。
 
-當前 \texttt{predict\_hetero.py from-raw} 模式在接收 \texttt{--author-id} 或
-\texttt{--category-id} 參數時，因建圖時的 \texttt{author\_to\_local} 與
-\texttt{cat\_to\_local} 字典未持久化，只能退回 cosine kNN fallback。
+\paragraph{2. Category 三層階層嵌入}
+圖中已存 \texttt{category.hier}（含 leaf/parent/root 三層索引），
+但模型只用了單一嵌入。應改為三層各自一個 Embedding 後拼接，
+充分利用「這個分類→它的父分類→根分類」的語義層次。
 
-\textbf{解法}：建圖結束時額外儲存 \texttt{hetero\_graph\_meta.pkl}，其中包含
-兩個查找字典，推論腳本讀取後可精確連接至已知的作者/分類節點。
+\subsection*{中優先：提升模型能力}
 
-\subsubsection{Category 三層階層嵌入的實際啟用}
+\paragraph{3. SBERT 文字特徵}（已支援 \texttt{--use-sbert}）
+把文字特徵從 50 維提升至 384 維，特別有利於標題語義豐富的影片。
 
-圖中已儲存 \texttt{category.hier}（形狀 $[51, 3]$，分別為 leaf/parent/root 的本地索引），
-但模型當前只使用單一 \texttt{nn.Embedding(51, d)}，未利用此資訊。
+\paragraph{4. 多任務不確定性加權}（Kendall 2018）
+目前 8 個任務等權重，改用可學習的 $\sigma_k^2$ 自動平衡：
+$\mathcal{L} = \sum_k \frac{1}{2\sigma_k^2} \mathcal{L}_k + \log \sigma_k$
 
-\textbf{解法}：將模型中的 \texttt{cat\_embed} 改為三個 Embedding 各出 $d/3$ 維後拼接：
+\paragraph{5. Tag 節點}
+加入 $(\text{video}, \texttt{has\_tag}, \text{tag})$ 邊，
+利用 \texttt{interaction.csv} 中的 \texttt{tag\_name} 語義信號。
 
-\begin{equation}
-\mathbf{h}_c^{(0)} = \bigl[\,
-  E_{\text{leaf}}(c_{\text{leaf}})\;\|\;
-  E_{\text{parent}}(c_{\text{parent}})\;\|\;
-  E_{\text{root}}(c_{\text{root}})\,\bigr]
-  \in \mathbb{R}^d
-\end{equation}
-
-\subsection{中優先：模型能力提升}
-
-\subsubsection{Tag 節點的引入}
-\texttt{interaction.csv} 中的 \texttt{tag\_name} 欄位包含豐富的語義標籤，
-對按讚率等指標有較強的預測力。建議在 \texttt{build\_hetero\_graph.py} 中加入
-\texttt{(video, has\_tag, tag)} 邊，tag 節點用 SBERT 或可學習嵌入向量表示。
-
-\subsubsection{多任務不確定性加權損失}
-\citet{kendall2018multi} 提出在每個任務損失前加入可學習的對數方差
-$\log \sigma_k^2$：
-
-\begin{equation}
-\mathcal{L}_{\text{MTL}} = \sum_{k=1}^{8}
-\frac{1}{2\sigma_k^2} \mathcal{L}_k + \log \sigma_k
-\end{equation}
-
-其中 $\sigma_k$ 為可學習參數，模型自動平衡各任務在訓練過程中的相對貢獻，
-特別適合本任務中各指標量綱和難度差異極大的情形。
-
-\subsubsection{HGT 消融實驗}
-當前僅評估了 GraphSAGE 變體；應在同一測試集上跑 \texttt{--model hgt}，
-以量化注意力機制在異質訊息傳遞中的貢獻。
-
-\subsection{低優先：評估完整性}
+\subsection*{低優先：評估完整性}
 
 \begin{itemize}
-\item \textbf{多隨機種子評估}（seed=0/1/2/42）：獲得具有統計意義的均值與標準差；
-\item \textbf{SBERT 文字特徵}：在 GPU 環境下預設啟用 \texttt{--use-sbert}，
-  文字維度由 50 → 384 維；
-\item \textbf{MMVED/HMMVED 基線對比}：作為公認的內容人氣預測基線，應在同一
-  測試集上重現其結果；
-\item \textbf{歸納冷啟動測試}：建立一個在訓練集中完全未出現的 held-out 影片集，
-  評估模型的真實零互動泛化能力；
-\item \textbf{GPU 訓練}：允許更大的隱藏維度（$d=256$）、更多訓練回合，
-  以觀察模型在充分訓練下的性能上限。
+\item 多 seed 評估（seed=0/1/2/42），獲得統計顯著的均值±標準差
+\item HGT vs SAGE 消融實驗
+\item 與 MMVED/HMMVED 公開 baseline 在同一測試集比較
+\item 真正的歸納冷啟動測試（held-out 的完全未見影片集）
 \end{itemize}
 
-%% ════════════════════════════════════════════════════════════
+% ════════════════════════════════════════════════════
+\section{相關工作}
+\label{sec:related}
+
+\paragraph{圖神經網路基礎}
+GCN \citep{kipf2017semi}奠定了訊息傳遞框架；
+GraphSAGE \citep{hamilton2017inductive}解決了歸納推論問題（能處理訓練時未見過的新節點，
+正是冷啟動的必要條件）；
+GAT \citep{velivckovic2018graph}引入注意力機制讓鄰居貢獻可學習加權；
+HGT \citep{hu2020heterogeneous}將注意力推廣至異質圖，是本報告 HGT 變體的直接來源。
+
+\paragraph{影片人氣預測}
+MMVED \citep{xie2020mmved}及其後續 HMMVED \citep{xie2021hmmved}是最直接的對標 baseline，
+以多模態融合從影片內容預測人氣，有公開程式碼。
+GraphInf \citep{graphinf2022}驗證了圖卷積在短影片人氣預測上的有效性。
+
+\paragraph{多任務不確定性加權}
+\citet{kendall2018multi}提出以可學習的任務不確定性動態平衡多任務損失，
+是本報告後續改進的主要候補方案。
+
+% ════════════════════════════════════════════════════
 \section{結論}
 
-本報告設計並實作了一套以異質圖神經網路為核心的短影音表現預測框架，
-完成了從資料探索、建圖設計、模型建構到端對端推論的完整概念驗證。
+本報告完成了三項核心貢獻：
+\begin{enumerate}
+\item \textbf{框架設計}：建立了三管線並行研究框架，清晰區分推薦（Pipeline A）、
+非圖基線（Pipeline B）、圖基線（Pipeline C）三個不同問題設定。
+\item \textbf{技術驗證}：Pipeline C 在 RTX 4090 GPU 上的實驗表明，
+異質圖結構在觀看時長排名預測上有效（Spearman $0.047 \to 0.256$，提升 4 倍以上）。
+\item \textbf{工程實作}：完整實作了從建圖、訓練、到冷啟動推論的端對端 pipeline，
+並加入嚴格的防資料洩漏機制。
+\end{enumerate}
 
-核心貢獻包括：
-（1）提出了以影片為中心、不包含使用者節點的異質圖建構方案，
-理論上可在零互動的冷啟動場景下直接推論；
-（2）實作了嚴格的防資料洩漏機制，確保評估的公平性；
-（3）在觀看時長指標上，異質圖神經網路的排名相關性顯著優於非圖基線，
-驗證了圖結構的有效性。
+下一步將重點在 GPU 環境上展開大模型實驗（$d=256$，3 層），
+並引入 SBERT 文字特徵與多任務不確定性加權，
+目標是讓 \texttt{mean\_watch\_time} Spearman 突破 0.35。
 
-下一步計畫將在 GPU 環境（Ubuntu 24.04）上正式展開，
-重點投入 SBERT 文字特徵的整合、多任務不確定性加權損失的實作、
-以及與 MMVED 等公開基線的系統性對比。
-
-%% ════════════════════════════════════════════════════════════
-\section*{致謝}
-資料集由清華大學 \citet{shang2025shortvideo} 提供；
-推薦系統框架採用 \citet{mmrec2023} 的 MMRec。
-
-%% ════════════════════════════════════════════════════════════
+% ════════════════════════════════════════════════════
 \bibliographystyle{abbrvnat}
 \begin{thebibliography}{99}
 
-\bibitem[Chen et al.(2020)]{chen2020graphtr}
-Chen, W., Cai, F., Chen, H., and de Rijke, M.
-\newblock \emph{Joint Neural Collaborative Filtering for Recommender Systems}.
-\newblock In \textit{Proceedings of CIKM 2020}, 2020.
+\bibitem[Hamilton et al.(2017)]{hamilton2017inductive}
+Hamilton, W., Ying, Z., and Leskovec, J.
+\newblock \emph{Inductive Representation Learning on Large Graphs}.
+\newblock \textit{NeurIPS}, 2017.
+
+\bibitem[Hu et al.(2020)]{hu2020heterogeneous}
+Hu, Z., Dong, Y., Wang, K., and Sun, Y.
+\newblock \emph{Heterogeneous Graph Transformer}.
+\newblock \textit{WWW}, 2020.
+
+\bibitem[Kendall et al.(2018)]{kendall2018multi}
+Kendall, A., Gal, Y., and Cipolla, R.
+\newblock \emph{Multi-Task Learning Using Uncertainty to Weigh Losses}.
+\newblock \textit{CVPR}, 2018.
+
+\bibitem[Kipf and Welling(2017)]{kipf2017semi}
+Kipf, T.~N. and Welling, M.
+\newblock \emph{Semi-Supervised Classification with Graph Convolutional Networks}.
+\newblock \textit{ICLR}, 2017.
 
 \bibitem[GraphInf(2022)]{graphinf2022}
 GraphInf Authors.
 \newblock \emph{Graph-Based Content Popularity Prediction for Short Videos}.
 \newblock Technical Report, 2022.
 
-\bibitem[Hamilton et al.(2017)]{hamilton2017inductive}
-Hamilton, W., Ying, Z., and Leskovec, J.
-\newblock \emph{Inductive Representation Learning on Large Graphs}.
-\newblock In \textit{NeurIPS 2017}, 2017.
-
-\bibitem[Hu et al.(2020)]{hu2020heterogeneous}
-Hu, Z., Dong, Y., Wang, K., and Sun, Y.
-\newblock \emph{Heterogeneous Graph Transformer}.
-\newblock In \textit{WWW 2020}, pages 2704--2710, 2020.
-
-\bibitem[Kendall et al.(2018)]{kendall2018multi}
-Kendall, A., Gal, Y., and Cipolla, R.
-\newblock \emph{Multi-Task Learning Using Uncertainty to Weigh Losses for
-  Scene Geometry and Semantics}.
-\newblock In \textit{CVPR 2018}, 2018.
-
-\bibitem[Kipf and Welling(2017)]{kipf2017semi}
-Kipf, T.~N. and Welling, M.
-\newblock \emph{Semi-Supervised Classification with Graph Convolutional
-  Networks}.
-\newblock In \textit{ICLR 2017}, 2017.
-
-\bibitem[MMRec(2023)]{mmrec2023}
-enoche.
-\newblock \emph{MMRec: Simplifying and Advancing Multimodal Recommendation}.
-\newblock \url{https://github.com/enoche/MMRec}, 2023.
-
 \bibitem[Shang et al.(2025)]{shang2025shortvideo}
-Shang, J., et al.
+Shang, J. et al.
 \newblock \emph{A Large-scale Dataset with Behavior, Attributes, and Content
   of Mobile Short-video Platform}.
-\newblock In \textit{WWW 2025}, 2025.
+\newblock \textit{WWW}, 2025.
 
 \bibitem[Velickovic et al.(2018)]{velivckovic2018graph}
-Veli\v{c}kovi\'{c}, P., Cucurull, G., Casanova, A., Romero, A., Lio, P., and
-  Bengio, Y.
+Veli\v{c}kovi\'{c}, P. et al.
 \newblock \emph{Graph Attention Networks}.
-\newblock In \textit{ICLR 2018}, 2018.
+\newblock \textit{ICLR}, 2018.
 
 \bibitem[Wei et al.(2019)]{wei2019mmgcn}
-Wei, Y., Wang, X., Nie, L., He, X., Hong, R., and Chua, T.-S.
+Wei, Y. et al.
 \newblock \emph{MMGCN: Multi-modal Graph Convolution Network for Personalized
   Recommendation of Micro-video}.
-\newblock In \textit{ACM MM 2019}, 2019.
+\newblock \textit{ACM MM}, 2019.
 
 \bibitem[Xie et al.(2020)]{xie2020mmved}
-Xie, H., Zhang, Y., Zhu, J., and Chen, E.
+Xie, H. et al.
 \newblock \emph{MMVED: Multi-modal Variational Encoder-Decoder for Micro-video
   Popularity Prediction}.
-\newblock In \textit{WWW 2020}, 2020.
+\newblock \textit{WWW}, 2020.
 
 \bibitem[Xie et al.(2021)]{xie2021hmmved}
-Xie, H., Zhang, Y., Zhu, J., Li, L., Chen, Z., and Chen, E.
+Xie, H. et al.
 \newblock \emph{A Hierarchical Multi-task Learning Framework for Micro-video
   Popularity Prediction}.
-\newblock \textit{IEEE Transactions on Multimedia}, 2021.
+\newblock \textit{IEEE TMM}, 2021.
 
 \end{thebibliography}
 

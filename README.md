@@ -20,6 +20,8 @@
 11. [目前實驗結果與解讀](#11-目前實驗結果與解讀)
 12. [遇到的技術問題與解法](#12-遇到的技術問題與解法)
 13. [下一步計畫](#13-下一步計畫)
+14. [完整資料集下載指南](#14-完整資料集下載指南)
+15. [複現紀錄（技術細節）](#15-複現紀錄技術細節)
 
 ---
 
@@ -1094,12 +1096,16 @@ Spearman 接近 0、AUC 接近 0.5，代表**目前的特徵對行為預測幾�
 
 ### 11.3 Pipeline C 結果：HeteroGNN
 
-見 [第 10 節 §10.7](#107-預期結果與解讀) 的完整結果表。
-重點摘要：
+| 環境 | mean_watch_time Spearman | 訓練時間（66-68 epochs） |
+|---|---|---|
+| macOS CPU | 0.2505 | ~47 秒 |
+| **Ubuntu RTX 4090** | **0.2559** | **~1 秒** |
 
-- `mean_watch_time` Spearman = **0.251**（GNN）vs 0.047（LightGBM）：**GNN 明顯優勝**，圖結構把相似影片的觀看時長信號傳了進來
-- 6 個 rate 指標 Spearman ≈ 0：兩個模型都接近隨機，主因是 rate 分佈極度稀疏（中位數 = 0），從純內容預測絕對人氣極難
-- 建議後續：加入 SBERT 文字特徵（`--use-sbert`）、加深 GNN 層數（`--layers 3`）、與 MMVED/HMMVED 公開 baseline 對比
+重點：
+- `mean_watch_time` Spearman = **0.256**（GNN）vs 0.047（LightGBM）：**GNN 明顯優勝**，圖結構把相似影片的觀看時長信號傳了進來
+- RTX 4090 訓練速度比 CPU **快約 47 倍**，讓後續大模型實驗可行
+- 6 個 rate 指標 Spearman ≈ 0：兩個模型都接近隨機，主因是 rate 分佈極度稀疏（中位數 = 0）
+- 建議後續：加入 SBERT 文字特徵（`--use-sbert`）、加深層數（`--layers 3 --d 256`）、與 MMVED 對比
 
 ---
 
@@ -1249,9 +1255,152 @@ A：需要安裝 `opencv-python`，而且本機需要能存取 ViT-B/16 的 torc
 注意：mode-B 抽取的是 4 幀 × 768 = 3072 維特徵，訓練時用的是 768 維，**維度不符**。
 如果要用 mode-B，需要重新用 mode-B 的特徵抽法來訓練。
 
+### Q：LightGBM 預測出來的 rate 會超過 1 嗎？
+A：可能。LightGBM 回歸沒有 sigmoid，極端情況下可能預測到負值或超過 1。推論時直接 `clip(pred, 0, 1)` 即可，不需要改成 binary classification（那樣需要把 rate 標籤轉成個別觀測，資料量會爆炸）。
+
+### Q：Pipeline A 的 MMGCN embedding 可以拿來當 Pipeline C 的特徵嗎？
+A：技術上可以，把 MMGCN 訓練後的 `item_embedding[v]` concat 進 Pipeline C 的 video.x。但這樣會讓 Pipeline C 綁回「該影片必須出現在 MMGCN 訓練圖裡」的限制，新影片就用不上，違背冷啟動設計初衷。建議 Pipeline C 保持純內容特徵。
+
+### Q：Spearman 相關係數是什麼？
+A：Spearman 相關係數衡量「排名的一致性」。若預測排第 1 名的影片真的是觀看最長的，Spearman = 1；若完全相反，Spearman = -1；若和猜硬幣一樣，Spearman ≈ 0。推薦場景最在意排名（哪支影片放第一），所以 Spearman 比 MAE 更重要。
+
 ---
 
-*最後更新：2026-05-31（新增 Pipeline C：異質圖 GNN 影片表現預測）*
+## 14. 完整資料集下載指南
+
+### 14.1 資料集結構總覽
+
+本專案的資料來自**三個不同的下載源**，功能各不相同：
+
+```
+資料來源 1：Tiny 行為日誌（Dropbox）
+  → interaction.csv（6.7M 行，153K 影片，7 天）
+  → 10 支示範影片的特徵和文字
+
+資料來源 2：推薦用預處理特徵（Dropbox）
+  → image_feat.npy（153561 × 768 維視覺特徵，所有影片）
+  → text_feat.npy（153561 × 50 維文字特徵，所有影片）
+
+資料來源 3：清華主站（完整版，需帳密）
+  → video_feature_total/（每支影片個別 .npy，可重抽特徵）
+  → asr_en/ title_en/（153K 支影片的文字，SBERT 需要）
+  → raw_file/（3.2 TB 原始 .mp4，非必要）
+```
+
+**Pipeline C 現在使用資料來源 1 + 2，已能完整運行。**
+
+### 14.2 目前工作集的實際規模
+
+「tiny」這個名字容易誤導。我們實際使用的資料量：
+
+| 項目 | 數量 |
+|---|---|
+| 互動行為記錄 | **6,767,010 行** |
+| 獨立使用者數 | **10,000 人** |
+| 獨立影片數 | **153,561 部** |
+| 有效行為標籤影片 | **98,999 部**（≥ 10 次曝光） |
+| Pipeline C 工作集 | **54,088 部**（有標籤 ∩ 有預抽特徵） |
+
+工作集只有 54,088 部的原因：另外 44,911 部影片雖然有行為標籤，但不在推薦資料集的 `image_feat.npy` 覆蓋範圍內（推薦資料集的 pid 對應關係只涵蓋其中一個子集）。要納入這些影片，需要從清華主站下載 `video_feature_total/`。
+
+### 14.3 重新下載推薦預處理特徵（最常用）
+
+```bash
+# 在 SSH 環境（Ubuntu，不需要 sudo）
+cd ~/shortvideo_mmgcn_poc
+
+# 方法 A：用 wget（通常已預裝）
+wget -O /tmp/rec_dataset.zip \
+  "https://www.dropbox.com/scl/fo/ha0e0wolgqgg5qskr52l1/AHZUySejwWJzfyJy8WGo2k4?rlkey=xwpqosx7b906yb7g8nwy53oqh&st=slry1d1l&dl=1"
+unzip /tmp/rec_dataset.zip -d data_raw/video_rec_dataset/
+# 應得到 image_feat.npy (153561,768)、text_feat.npy (153561,50)、video.inter
+
+# 方法 B：用 Python（不依賴任何系統工具）
+.venv/bin/python - <<'EOF'
+import urllib.request, pathlib
+url  = "https://www.dropbox.com/scl/fo/ha0e0wolgqgg5qskr52l1/AHZUySejwWJzfyJy8WGo2k4?rlkey=xwpqosx7b906yb7g8nwy53oqh&st=slry1d1l&dl=1"
+dest = pathlib.Path("/tmp/rec_dataset.zip")
+print("Downloading...")
+urllib.request.urlretrieve(url, dest)
+print(f"Saved to {dest}")
+EOF
+```
+
+### 14.4 從清華主站下載完整文字檔（SBERT 用，無連線數限制）
+
+```bash
+BASE="http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset"
+AUTH="--user=videodata --password='ShortVideo@10000'"
+
+# 下載互動主檔（.csv，無連線數限制）
+wget $AUTH -c --show-progress \
+     -O data_raw/shortvideo_full/interaciton_filtered.csv \
+     "$BASE/interaciton_filtered.csv"
+
+# 下載分類對照（小檔）
+wget $AUTH -O data_raw/shortvideo_full/category_cn_en.csv \
+     "$BASE/category_cn_en.csv"
+```
+
+**注意**：`.npy` 和 `.mp4` 大檔案限制 3 個同時連線，用 `-c` 斷點續傳：
+```bash
+wget $AUTH -c --limit-rate=10m -o /tmp/wget_img.log \
+     -O data_raw/shortvideo_full/image_feat.npy \
+     "$BASE/image_feat.npy" &
+```
+
+### 14.5 不需要下載即可改善特徵（推薦先試）
+
+`interaction.csv` 裡已有 `title`（中文標題）欄位，可直接用 SBERT 重抽 384 維文字特徵：
+
+```bash
+# 重建圖（用 SBERT 替換 50 維舊文字特徵）
+.venv/bin/python scripts/build_hetero_graph.py --use-sbert
+# 重新訓練
+.venv/bin/python scripts/train_hetero.py --model sage --epochs 300 --seed 42 \
+    --out-dir data_processed/behavior/models_gnn_sbert
+```
+
+這不需要下載任何新資料，但首次執行會自動下載 SBERT 模型（約 400 MB）。
+
+---
+
+## 15. 複現紀錄（技術細節）
+
+### 15.1 環境差異
+
+| 環境 | Python | PyTorch | CUDA | GPU |
+|---|---|---|---|---|
+| macOS（開發） | 3.10.20 | 2.12.0 | 無 | — |
+| Ubuntu 24.04（訓練） | 3.12 | 2.6.0+cu124 | 12.4 相容 | RTX 4090 24 GB |
+
+### 15.2 MMRec 相容性修補清單
+
+MMRec 原始碼針對較舊版本的 NumPy / SciPy / PyG，需要以下修補才能在現有環境下運行：
+
+| 檔案 | 問題 | 修法 |
+|---|---|---|
+| `utils/metrics.py` | `np.float` 在 NumPy 2.0 移除 | 改為內建 `float` |
+| `models/lightgcn.py` | SciPy 新版不支援 DOK sparse `_update` | 改用 COO 格式建鄰接矩陣 |
+| `models/mmgcn.py` | PyG 2.7 的 `message()` 參數簽章改變 | 更新參數名稱 |
+| `main.py` | `--epochs` CLI 參數未覆蓋 config | 加入 CLI override 邏輯 |
+| `*.yaml` 設定檔 | 原始設定跑完整超參數網格 | 改為單一組合 smoke test |
+
+### 15.3 處理資料集的 pid 對應關係
+
+推薦資料集（`video.inter`）使用 0～153560 的整數 itemID，行為日誌（`interaction.csv`）使用雜湊過的真實 pid（如 `84199269992`）。對應方式：
+
+```
+推薦資料集的 userID=0 在時間 T 看了 itemID=116244
+interaction.csv 中 user_id=3524 在時間 T 看了 pid=82927753107
+→ userID=0 = user_id=3524，itemID=116244 = pid=82927753107
+```
+
+對全部 294,355 筆互動配對，成功對應 86,578 個 itemID，結果存於 `data_raw/video_rec_dataset/pids.txt`（第 i 行 = itemID i 的真實 pid，`-1` 表示無法對應）。
+
+---
+
+*最後更新：2026-05-31（新增 Pipeline C GPU 結果、完整資料下載指南、複現紀錄）*
 *論文來源：[A Large-scale Dataset with Behavior, Attributes, and Content of Mobile Short-video Platform](https://arxiv.org/pdf/2502.05922) (WWW 2025)*
 *推薦框架：[enoche/MMRec](https://github.com/enoche/MMRec)*
 *資料集：[tsinghua-fib-lab/ShortVideo_dataset](https://github.com/tsinghua-fib-lab/ShortVideo_dataset)*

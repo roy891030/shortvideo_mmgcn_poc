@@ -1,0 +1,42 @@
+reading data_raw/shortvideo_tiny/interaction.csv
+  chunk 0: 2,000,000 rows
+  chunk 1: 2,000,000 rows
+  chunk 2: 2,000,000 rows
+  chunk 3: 767,010 rows
+total rows: 6,767,010
+unique pids: 153,561
+unique users: 10,000
+derived 'effective_view' from 'click' column
+filtered 54562 / 153561 videos with < 10 impressions
+final label rows: 98,999
+
+label summary:
+                pid  cvm_like_mean  ...  std_watch_time  n_impressions
+count  9.899900e+04     98999.0000  ...      98999.0000     98999.0000
+mean   8.310630e+10         0.0260  ...         29.5929        65.3056
+std    1.898021e+09         0.0840  ...         33.8675       631.7642
+min    5.982127e+10         0.0000  ...          0.0000        10.0000
+50%    8.383581e+10         0.0000  ...         17.4212        27.0000
+90%    8.457174e+10         0.0833  ...         74.0886       108.0000
+99%    8.466813e+10         0.5000  ...        152.8353       546.0000
+max    8.467728e+10         1.0000  ...        395.2384    131124.0000
+
+[8 rows x 12 columns]
+Traceback (most recent call last):
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/scripts/build_behavior_labels.py", line 141, in <module>
+    main()
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/scripts/build_behavior_labels.py", line 136, in main
+    labels.to_parquet(args.out, index=False)
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/.venv/lib/python3.10/site-packages/pandas/util/_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/.venv/lib/python3.10/site-packages/pandas/core/frame.py", line 3124, in to_parquet
+    return to_parquet(
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/.venv/lib/python3.10/site-packages/pandas/io/parquet.py", line 478, in to_parquet
+    impl = get_engine(engine)
+  File "/Users/luoyi/Desktop/shortvideo_mmgcn_poc/.venv/lib/python3.10/site-packages/pandas/io/parquet.py", line 68, in get_engine
+    raise ImportError(
+ImportError: Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.
+A suitable version of pyarrow or fastparquet is required for parquet support.
+Trying to import the above resulted in these errors:
+ - Missing optional dependency 'pyarrow'. pyarrow is required for parquet support. Use pip or conda to install pyarrow.
+ - Missing optional dependency 'fastparquet'. fastparquet is required for parquet support. Use pip or conda to install fastparquet.

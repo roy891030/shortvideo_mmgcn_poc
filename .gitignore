@@ -1,4 +1,5 @@
 .DS_Store
+.claude/
 .python310/
 .venv/
 __pycache__/
@@ -7,6 +8,8 @@ __pycache__/
 # Large/reproducible data artifacts.
 data_raw/video-rec-dataset.zip
 data_raw/video_rec_dataset/
+data_raw/shortvideo_tiny/interaction.csv
+data_processed/behavior/X.npy
 data_processed/video/*.npy
 MMRec/data/video/*.npy
 MMRec/saved/

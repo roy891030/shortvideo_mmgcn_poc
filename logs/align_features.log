@@ -1,0 +1,6 @@
+loaded 98999 candidate pids from labels
+visual matrix: kept 54088 pids
+
+X: (54088, 818), Y: (54088, 8), weights: (54088,)
+visual dim: 768, text dim: 50
+wrote artifacts to data_processed/behavior

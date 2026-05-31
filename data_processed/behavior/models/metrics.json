@@ -1,0 +1,65 @@
+{
+  "n_train": 43270,
+  "n_val": 5409,
+  "n_test": 5409,
+  "feature_dim": 818,
+  "targets": [
+    "like_rate",
+    "comment_rate",
+    "follow_rate",
+    "collect_rate",
+    "forward_rate",
+    "hate_rate",
+    "effective_view_rate",
+    "mean_watch_time"
+  ],
+  "metrics": {
+    "like_rate": {
+      "mae": 0.04414115538441328,
+      "rmse": 0.08198856052197236,
+      "spearman": -0.0013450799553579454,
+      "auc_above_median": 0.4982684710957714
+    },
+    "comment_rate": {
+      "mae": 0.0090991720906387,
+      "rmse": 0.03656581569795751,
+      "spearman": -0.002907258821369088,
+      "auc_above_median": 0.4962806745493312
+    },
+    "follow_rate": {
+      "mae": 0.007905594543340637,
+      "rmse": 0.03621909105940266,
+      "spearman": -0.008521808453124469,
+      "auc_above_median": 0.48688172906017635
+    },
+    "collect_rate": {
+      "mae": 0.012474478755872227,
+      "rmse": 0.04141854053189619,
+      "spearman": -0.034782763942128134,
+      "auc_above_median": 0.45947368011438305
+    },
+    "forward_rate": {
+      "mae": 0.004635378281805912,
+      "rmse": 0.026116770914894224,
+      "spearman": -0.011471912125635319,
+      "auc_above_median": 0.4800206260242375
+    },
+    "hate_rate": {
+      "mae": 0.001976025655874281,
+      "rmse": 0.013551748336167478,
+      "spearman": -0.013980013705939034,
+      "auc_above_median": 0.46019945147255203
+    },
+    "effective_view_rate": {
+      "mae": 0.14254748037168252,
+      "rmse": 0.17693999492818027,
+      "spearman": 0.016017884074920993,
+      "auc_above_median": 0.5075157959564977
+    },
+    "mean_watch_time": {
+      "mae": 23.630622623180596,
+      "rmse": 34.6773766326852,
+      "spearman": 0.04707502854480571
+    }
+  }
+}

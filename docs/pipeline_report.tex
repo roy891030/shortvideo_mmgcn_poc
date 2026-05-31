@@ -214,65 +214,303 @@ GNN 的核心運作機制叫做\textbf{訊息傳遞（Message Passing）}。
 \end{infobox2}
 
 % ════════════════════════════════════════════════════
-\section{資料集與取得方式}
+\section{資料集：每個檔案的確切內容與運作原理}
 \label{sec:data}
 
-\subsection{ShortVideo 資料集介紹}
+本節對所有資料檔案逐一說明其\textbf{確切格式、數值範圍、在 pipeline 中的角色}，
+以及各檔案之間如何串接成 Pipeline C 的工作集。
 
-本研究使用清華大學 \citet{shang2025shortvideo} 發表於 WWW 2025 的 ShortVideo 資料集，
-從某真實短影音平台採集，是目前公開規模最大、行為類型最完整的短影音研究資料集之一。
+\subsection{原始資料一覽}
 
 \begin{table}[H]
 \centering
-\caption{資料集基本統計（本報告使用版本）}
-\label{tab:dataset}
-\begin{tabular}{lrl}
+\caption{所有資料檔案的確切規格（以實際讀取結果為準）}
+\label{tab:files}
+\begin{tabular}{llrll}
 \toprule
-\textbf{項目} & \textbf{數量} & \textbf{說明} \\
+\textbf{檔案} & \textbf{格式} & \textbf{大小} & \textbf{Shape / 行數} & \textbf{誰用它} \\
 \midrule
-曝光記錄總數   & 6,767,010 & 每列 = 一位使用者觀看一支影片一次 \\
-獨立使用者數   & 10,000 & 已雜湊匿名 \\
-獨立影片數     & 153,561 & 含視覺特徵的完整集合 \\
-資料時間跨度   & 7 天 & 2022-09-16 至 2022-09-22 \\
-\midrule
-有效標籤影片   & 98,999 & 曝光 $\geq 10$ 次，標籤統計較穩定 \\
-Pipeline C 工作集 & \textbf{54,088} & 有標籤 $\cap$ 有預抽特徵的影片 \\
+interaction.csv    & CSV，28 欄  & 1.42 GB & 6,767,010 行 & B, C（標籤＋屬性） \\
+image\_feat.npy    & NumPy float32 & 471 MB & $(153561, 768)$ & B, C（視覺輸入） \\
+text\_feat.npy     & NumPy float64 & 61 MB  & $(153561, 50)$  & B, C（文字輸入） \\
+pids.txt           & 純文字       & 1.2 MB & 153,561 行      & B, C（行號↔pid） \\
+video.inter        & TSV，5 欄   & 7.7 MB & 294,355 行      & A（MMGCN 推薦） \\
+categories\_cn\_en.csv & CSV & 31 KB & 826 行 × 6 欄 & C（分類名稱對照） \\
+video\_feature\_total/ & 個別 .npy & 各 3 KB & $(8,256)$ 每檔 & \textbf{不用（舊格式）} \\
+raw\_file/         & .mp4        & 各 3–13 MB & 10 支示範影片 & from-raw 測試 \\
+title\_en/ asr\_en/ asr\_zn/ & .txt & 各 1 KB & 各 10 個 & 示範用（非訓練） \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{warnbox2}[「Tiny」的名字會誤導人]
-這份資料集雖然叫「tiny version」，但它包含了完整的 7 天互動日誌（670 萬行）
-和所有 153,561 支影片的預抽特徵。「Tiny」指的是原始 .mp4 影片檔只附了 10 支示範，
-\textbf{互動資料和視覺特徵是完整的}，對 PoC 完全足夠。
+\begin{warnbox2}[「Tiny」名字的誤導：互動資料和視覺特徵其實是完整的]
+「Tiny version」的「tiny」只指原始 .mp4 影片檔只附了 10 支示範。
+\texttt{interaction.csv}（670 萬行，153K 影片）和
+\texttt{image\_feat.npy}（153K 支影片的視覺特徵）都是完整的，
+對 Pipeline B/C 的訓練和評估完全足夠。
 \end{warnbox2}
 
-\subsection{為什麼工作集只有 54,088 部？}
+\subsection{\texttt{interaction.csv}：行為日誌（每一行是什麼）}
 
-Pipeline C 需要兩樣東西：（1）影片的行為標籤（按讚率等），（2）影片的視覺特徵向量。
-兩者來自不同的資料檔案，覆蓋的影片集合有差異：
-
-\begin{center}
-\begin{tikzpicture}
-\draw[fill=vidblue!15, draw=vidblue] (0,0) ellipse (3.0cm and 1.2cm);
-\draw[fill=authgreen!15, draw=authgreen] (1.5,0) ellipse (2.5cm and 1.0cm);
-\node[font=\small] at (-1.5, 0) {有行為標籤};
-\node[font=\small] at (-1.5,-0.4) {98,999 部};
-\node[font=\small] at (3.3, 0) {有視覺特徵};
-\node[font=\small] at (3.3,-0.4) {65,030 部};
-\node[font=\small\bfseries] at (1.2, 0) {工作集};
-\node[font=\small] at (1.2,-0.4) {54,088 部};
-\end{tikzpicture}
-\end{center}
-
-另外 44,911 部有標籤但沒有特徵的影片，需要從清華主站下載 \texttt{video\_feature\_total/}
-後才能納入訓練。
-
-\subsection{行為標籤的分佈特性}
+每一行代表\textbf{一個使用者看了一支影片的一次曝光事件}。
+表~\ref{tab:inter_fields} 列出 28 個欄位的完整說明與真實第一行數值。
 
 \begin{table}[H]
 \centering
-\caption{8 個行為指標的分佈（54,088 部影片工作集）}
+\caption{\texttt{interaction.csv} 的 28 個欄位（第一行真實數值）}
+\label{tab:inter_fields}
+\footnotesize
+\begin{tabular}{llll}
+\toprule
+\textbf{欄位} & \textbf{型態} & \textbf{第一行範例} & \textbf{說明} \\
+\midrule
+\texttt{user\_id}           & int   & 7313          & 使用者 ID（已雜湊匿名，共 10,000 人） \\
+\texttt{pid}                & int   & 84199269992   & 影片 ID（已雜湊，共 153,561 個唯一值） \\
+\texttt{author\_id}         & int   & 193159093     & 作者 ID \\
+\texttt{category\_id}       & int   & 36            & 影片的三級分類 leaf ID \\
+\texttt{category\_level}    & int   & 1             & 此次分類是第幾層（1=根, 2=次, 3=葉） \\
+\texttt{parent\_id}         & int   & 36            & 父分類 ID \\
+\texttt{root\_id}           & int   & 36            & 根分類 ID \\
+\texttt{exposed\_time}      & int   & 1663333100    & 曝光 Unix 時間戳 \\
+\texttt{author\_fans\_count}& int   & 46761         & 作者粉絲數（0 ～ 2.16 億） \\
+\texttt{watch\_time}        & float & 136           & 該使用者觀看秒數（min=0, med=14, max=951） \\
+\texttt{duration}           & float & 91.9          & 影片總長（秒）（min=2.7, med=81.7, max=1734.9） \\
+\texttt{cvm\_like}          & bool  & False         & 有沒有按讚（全體按讚率：2.57\%） \\
+\texttt{click}              & bool  & True          & 有沒有點擊進去看 \\
+\texttt{comment}            & bool  & False         & 有沒有留言（全體：0.38\%） \\
+\texttt{follow}             & bool  & False         & 有沒有追蹤作者 \\
+\texttt{collect}            & bool  & False         & 有沒有收藏 \\
+\texttt{forward}            & bool  & False         & 有沒有轉發 \\
+\texttt{hate}               & bool  & False         & 有沒有點「不喜歡」 \\
+\texttt{tag\_name}          & str   & 正能量        & 影片標籤（同 pid 可出現多行不同 tag） \\
+\texttt{title}              & str   & 现如今为啥    & 影片標題（中文）← SBERT 文字特徵的來源 \\
+\texttt{p\_hour}            & int   & 21            & 曝光小時（0–23） \\
+\texttt{p\_date}            & int   & 20220916      & 曝光日期（YYYYMMDD，共 7 天） \\
+\texttt{gender}             & str   & M             & 使用者性別（M/F） \\
+\texttt{age}                & int   & 42            & 使用者年齡 \\
+\texttt{mod\_price}         & int   & 2699          & 使用者手機價格（元） \\
+\texttt{fre\_city}          & str   & 邯郸          & 使用者所在城市 \\
+\texttt{fre\_community\_type} & str & unknown       & 居住類型 \\
+\texttt{fre\_city\_level}   & str   & 三线城市      & 城市等級 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{為什麼 interaction.csv 有 6,767,010 行但只有 153,561 個唯一影片？}
+因為 \texttt{tag\_name} 的設計是「每行一個標籤」：同一影片在同一次曝光中若有多個標籤，
+就會出現多行記錄，每行只差 tag\_name 欄位的值。
+每支影片被多個使用者看多次，每次曝光也是獨立一行。
+
+\subsection{\texttt{image\_feat.npy}：視覺特徵矩陣（Pipeline C 的視覺輸入）}
+
+\begin{lstlisting}[language=python, caption=讀取方法與格式確認]
+import numpy as np
+img = np.load("data_raw/video_rec_dataset/image_feat.npy", mmap_mode="r")
+print(img.shape)   # (153561, 768)
+print(img.dtype)   # float32
+print(img[0, :5])  # [-0.7176, -0.1146, -0.2300,  0.6312, -0.4630]  第0支影片
+print(img[1, :5])  # [-0.0481, -0.7161, -0.2116,  1.1723, -0.6176]  第1支影片
+# img[i] = 第 i 支影片的 768 維視覺特徵，第 i 支是誰由 pids.txt 第 i 行決定
+\end{lstlisting}
+
+\textbf{這 768 個數字是什麼}：它們是 ViT-B/16（Vision Transformer）模型的倒數第二層輸出，
+代表影片的「視覺語意」。人類無法直接解讀這 768 個數字，但它們有一個重要性質：
+視覺風格相近的兩支影片，其 768 維向量的夾角很小（餘弦相似度高）。
+Pipeline C 正是利用這一性質建立 $k$-NN 邊（\texttt{similar\_to}）。
+
+\textbf{這些特徵怎麼來的}：資料集作者已替所有 153,561 支影片跑完 ViT-B/16 推論，
+打包成矩陣。使用者不需要下載原始影片或重新執行 ViT；直接讀取這個 .npy 就能用。
+
+\textbf{當輸入一支全新影片時（from-raw 模式）}：\texttt{predict\_hetero.py} 會在本機
+即時執行 ViT-B/16 推論（首次執行自動下載模型權重 330 MB），
+得到同樣格式的 768 維向量，確保與訓練特徵的分佈一致。
+
+\subsection{\texttt{text\_feat.npy}：文字特徵矩陣（50 維，低品質）}
+
+\begin{lstlisting}[language=python]
+txt = np.load("data_raw/video_rec_dataset/text_feat.npy", mmap_mode="r")
+print(txt.shape)   # (153561, 50)
+print(txt.dtype)   # float64
+print(txt[0, :5])  # [0.2552, 0.1660, 0.2024, -0.0848, 0.5043]
+\end{lstlisting}
+
+這 50 維文字特徵的確切抽取方式不明（推測為 GloVe 詞向量平均後降維）。
+維度低（50 vs 768），文字語意保留有限。
+
+\textbf{from-raw 模式的文字限制}：由於我們無法從單一影片的標題文字重現這個 50 維特徵，
+from-raw 模式目前對文字部分使用全零向量作為替代，模型的文字信號在推論時等同於缺失。
+改善方式：用 \texttt{--use-sbert} 重建整張圖（384 維 SBERT），
+此時 from-raw 也會自動切換成 SBERT 模式。
+
+\subsection{\texttt{pids.txt}：行號與真實影片 ID 的對應（必不可少的橋樑）}
+
+\begin{lstlisting}[language=bash]
+# 檔案格式：每行一個整數（pid 或 -1）
+head -10 data_raw/video_rec_dataset/pids.txt
+# 59821271563    <- image_feat[0] 是 pid=59821271563 的特徵
+# 80200361806    <- image_feat[1] 是 pid=80200361806 的特徵
+# -1             <- image_feat[2] 無效（無影片對應）
+# -1             <- image_feat[3] 無效
+# 84664784964    <- image_feat[4] 是 pid=84664784964 的特徵
+# -1
+# 84091283105
+# -1
+# -1
+# 69022469384
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\caption{\texttt{pids.txt} 數量統計}
+\begin{tabular}{lrl}
+\toprule
+\textbf{項目} & \textbf{數量} & \textbf{說明} \\
+\midrule
+總行數 & 153,561 & = \texttt{image\_feat.npy} 的行數 \\
+有效 entries（非 -1） & 86,578 & 含重複 pid \\
+唯一有效 pid & \textbf{65,030} & 重複消除後的實際可查數 \\
+重複出現的 pid & 21,548 & 同一 pid 映射到多個矩陣行（資料品質問題） \\
+-1（無效行） & 66,983 & 43.6\% 的矩陣行沒有對應影片 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+pids.txt 中存在 21,548 個重複 pid，同一支影片的特徵在矩陣中出現多次。
+程式碼中用字典去重，保留最後出現的行索引（對最終特徵值影響微小）。
+
+\subsection{\texttt{video.inter}：推薦系統格式（僅 Pipeline A 使用）}
+
+\begin{lstlisting}[language=bash]
+head -4 data_raw/video_rec_dataset/video.inter
+# userID  itemID  rating  timestamp       x_label
+# 0       116244  5       1663597856      0
+# 0       37411   5       1663794733      0
+\end{lstlisting}
+
+\begin{infobox2}[特別注意：此處的 ID 體系與 interaction.csv 完全不同]
+\texttt{video.inter} 的 \texttt{userID}（如 0, 1, 2…）和 \texttt{itemID}（如 116244）
+是重新映射過的 0-based 整數，不是 \texttt{interaction.csv} 裡的
+\texttt{user\_id}（如 7313）或 \texttt{pid}（如 84199269992）。
+這個檔案只供 Pipeline A 的 MMRec 框架使用；Pipeline B 和 C 都不用它。
+\end{infobox2}
+
+\subsection{\texttt{video\_feature\_total/}：舊格式特徵（Pipeline C 不使用）}
+
+\begin{lstlisting}[language=python]
+import numpy as np
+x = np.load("data_raw/shortvideo_tiny/video_feature_total/1.npy")
+print(x.shape)   # (8, 256)  ← 8 幀 × 256 維（不是 768 維！）
+\end{lstlisting}
+
+這裡的特徵是 $8 \times 256$ 維，採用了和 \texttt{image\_feat.npy}（768 維）不同的舊版模型架構，
+\textbf{兩者體系不兼容，絕對不能混用}。
+此資料夾只有 10 支示範影片的特徵，且 ID（1, 2, …10）是順序編號，
+不是 interaction.csv 裡的真實 pid（如 84199269992）。
+
+\subsection{資料處理完整鏈條：從 6.7M 行到 54,088 部工作集}
+
+以下說明原始資料如何一步一步被轉化成 Pipeline C 使用的異質圖。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  filenode/.style={draw=gray!60, fill=lightbg, rounded corners=4pt,
+                   minimum width=5.5cm, minimum height=0.8cm, font=\small,
+                   align=center, text=darktext},
+  procnode/.style={draw=vidblue!60, fill=vidblue!8, rounded corners=4pt,
+                   minimum width=5.5cm, minimum height=0.8cm, font=\footnotesize,
+                   align=center, text=darktext},
+  outnode/.style={draw=authgreen!70, fill=authgreen!10, rounded corners=4pt,
+                  minimum width=5.5cm, minimum height=0.8cm, font=\small,
+                  align=center, text=darktext},
+  node distance=0.5cm
+]
+% 原始輸入
+\node[filenode] (csv) {\textbf{interaction.csv} (1.42 GB)\\
+  \footnotesize 6,767,010 行，153,561 個唯一 pid，28 欄};
+\node[filenode, right=1.2cm of csv] (img) {\textbf{image\_feat.npy} (471 MB)\\
+  \footnotesize shape=(153561, 768), float32};
+\node[filenode, below=0.3cm of img] (pids) {\textbf{pids.txt} (1.2 MB)\\
+  \footnotesize 153561 行，65030 個唯一有效 pid};
+\node[filenode, below=0.3cm of pids] (txt) {\textbf{text\_feat.npy} (61 MB)\\
+  \footnotesize shape=(153561, 50), float64};
+
+% 中間處理
+\node[procnode, below=0.6cm of csv] (step1)
+  {Step 1: \texttt{groupby(pid)}，過濾 $<10$ 次曝光};
+\node[outnode, below=0.4cm of step1] (labels)
+  {\textbf{video\_behavior\_labels.parquet}\\
+   \footnotesize 98,999 部影片 $\times$ 12 欄（pid + 8 率 + 統計）};
+
+\node[procnode, below=0.6cm of labels] (step2)
+  {Step 2: 對齊特徵與標籤（取交集）};
+\node[outnode, below=0.4cm of step2] (workset)
+  {\textbf{工作集：54,088 部影片}\\
+   \footnotesize meta.parquet, X.npy (818d), Y.npy (8), weights.npy};
+
+\node[procnode, below=0.6cm of workset] (step3)
+  {Step 3: 補充 author/category/duration 資訊\\
+   \footnotesize 再次讀 interaction.csv，建異質圖邊};
+\node[outnode, below=0.4cm of step3] (graph)
+  {\textbf{hetero\_graph.pt (199 MB)}\\
+   \footnotesize 54,088 影片節點，video.x=[54088, 819]};
+
+% 箭頭
+\draw[arrowstyle] (csv) -- (step1);
+\draw[arrowstyle] (step1) -- (labels);
+\draw[arrowstyle] (labels) -- (step2);
+\draw[arrowstyle, draw=vidblue] (img.south) -- ++(0,-0.3) -| (step2.north east);
+\draw[arrowstyle, draw=vidblue] (pids.south) -- ++(0,-0.2) -| (step2.east);
+\draw[arrowstyle, draw=vidblue] (txt.south) -- ++(0,-0.3) -| (step2.south east);
+\draw[arrowstyle] (step2) -- (workset);
+\draw[arrowstyle] (workset) -- (step3);
+\draw[arrowstyle, draw=gray!60] (csv.south) -- ++(0,-5.0) -| (step3.north east);
+\draw[arrowstyle] (step3) -- (graph);
+
+\end{tikzpicture}
+\caption{原始資料到 Pipeline C 工作集的完整處理鏈條。
+interaction.csv 先被聚合成 per-video 標籤，再與 image\_feat.npy 取交集，
+最後再次讀取 interaction.csv 補充作者/分類/時長資訊建立異質圖。}
+\label{fig:dataflow}
+\end{figure}
+
+\textbf{為什麼最終只剩 54,088 部？}
+
+\begin{itemize}
+\item 153,561 個唯一 pid（interaction.csv 裡出現的影片）
+\item $\xrightarrow{\text{≥10 次曝光篩選}}$ 98,999 部（標籤可靠的影片）
+\item image\_feat.npy 透過 pids.txt 只能對應到 \textbf{65,030 個唯一 pid}
+      （pids.txt 有 66,983 個 -1 和 21,548 個重複）
+\item 取交集 $98999 \cap 65030 = \mathbf{54,088}$ 部
+\item 其中 44,911 部影片有標籤但找不到特徵 → 下載主站 \texttt{video\_feature\_total/} 可補入
+\end{itemize}
+
+\subsection{為什麼現有資料已足夠 Pipeline C 驗證}
+
+\begin{tipbox}[足夠的理由]
+54,088 部影片的規模已足以回答本研究的核心問題：
+\begin{enumerate}
+\item \textbf{圖結構有沒有幫助？} 已驗證：\texttt{mean\_watch\_time} Spearman
+  $0.047 \to 0.256$（4 倍以上提升）
+\item \textbf{冷啟動推論可行嗎？} 已驗證：\texttt{predict\_hetero.py from-raw} 用
+  真實 .mp4 在本機跑通，維度嚴格匹配
+\item \textbf{訓練是否收斂？} 已驗證：GPU 上 68 個 epoch 早停，訓練損失穩定下降
+\end{enumerate}
+\end{tipbox}
+
+\textbf{現有資料的真實限制（誠實說明）}：
+\begin{itemize}
+\item 工作集覆蓋率：54,088 / 98,999 = \textbf{54.6\%}（接近一半的有標籤影片沒有特徵可用）
+\item 文字特徵品質低：50 維的舊版特徵，from-raw 時更是全零
+\item 時間跨度僅 7 天，模型是否能泛化到更長期的行為規律未知
+\item 類別涵蓋率低：工作集只有 51 個分類（佔全部 826 個的 6.2\%）
+\end{itemize}
+
+\subsection{行為標籤的分佈（為什麼 rate 指標難預測）}
+
+\begin{table}[H]
+\centering
+\caption{8 個行為指標的分佈（54,088 部影片，真實統計）}
 \label{tab:label_stats}
 \begin{tabular}{lrrrr}
 \toprule
@@ -290,76 +528,33 @@ Pipeline C 需要兩樣東西：（1）影片的行為標籤（按讚率等）�
 \end{tabular}
 \end{table}
 
-\textbf{為什麼「rate」類指標那麼難預測？}
-因為大部分影片的按讚率都是 0——你預測所有影片都是 0，準確率高達 84.6\%，
-但這毫無意義，因為你完全沒有區分「爆紅的 15.4\%」和「路人的 84.6\%」的能力。
-只有 \texttt{mean\_watch\_time}（觀看時長）的分佈相對正常，
-且最直接受影片內容品質影響，是最值得用 GNN 預測的指標。
+rate 指標中位數為 0，代表超過一半的影片完全沒有按讚/留言/追蹤等互動。
+這是短影音平台「贏者全拿」效應的直接體現：少數爆紅影片主導了所有的互動，
+絕大多數影片沒有任何主動行為。純從影片內容預測這種「隨機爆紅效應」
+是學術界公認的困難問題，兩個模型的 Spearman 接近 0 是符合預期的結果。
 
-\subsection{資料取得完整指南（SSH 環境）}
+\subsection{資料取得指南（SSH 環境，無需 sudo）}
 
-\subsubsection*{資料來源總覽}
-
-\begin{table}[H]
-\centering
-\caption{三個資料來源的功能與位置}
-\begin{tabular}{lll}
-\toprule
-\textbf{來源} & \textbf{內容} & \textbf{位置} \\
-\midrule
-Dropbox A（行為日誌） & interaction.csv + 10 示範影片 & 見下方連結 \\
-Dropbox B（推薦特徵） & image\_feat.npy + text\_feat.npy & 見下方連結 \\
-清華主站（完整版）    & 全部影片 .npy + 文字 + 原始影片 & 帳密見下方 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection*{下載方法（Ubuntu SSH，無需 sudo）}
-
-\begin{lstlisting}[language=bash, caption=推薦預處理特徵（Pipeline C 必要）]
+\begin{lstlisting}[language=bash, caption=Pipeline C 必要資料（Dropbox，一次下載）]
 cd ~/shortvideo_mmgcn_poc
-# Dropbox B：image_feat.npy + text_feat.npy（約 500 MB）
-wget -O /tmp/rec.zip \
-  "https://www.dropbox.com/scl/fo/ha0e0wolgqgg5qskr52l1/AHZUySejwWJzfyJy8WGo2k4\
-?rlkey=xwpqosx7b906yb7g8nwy53oqh&st=slry1d1l&dl=1"
+# 推薦特徵（image_feat.npy + text_feat.npy + video.inter）
+wget -O /tmp/rec.zip "https://www.dropbox.com/scl/fo/ha0e0wolgqgg5qskr52l1/AHZUySejwWJzfyJy8WGo2k4?rlkey=xwpqosx7b906yb7g8nwy53oqh&st=slry1d1l&dl=1"
 unzip /tmp/rec.zip -d data_raw/video_rec_dataset/
-\end{lstlisting}
-
-\begin{lstlisting}[language=bash, caption=行為日誌 Tiny 版（Pipeline B/C 必要）]
-# Dropbox A：interaction.csv + 示範影片（約 200 MB）
-wget -O /tmp/tiny.zip \
-  "https://www.dropbox.com/scl/fo/5z7pwp6xjkrr1926vreu6/AFYter5C6BDTOCpxkxF0k9Y\
-?rlkey=p28j6u1fl1ubb7bufiq16onbl&st=7aktff85&dl=1"
+# 行為日誌 + 示範影片（interaction.csv + raw_file/ + title_en/ ...）
+wget -O /tmp/tiny.zip "https://www.dropbox.com/scl/fo/5z7pwp6xjkrr1926vreu6/AFYter5C6BDTOCpxkxF0k9Y?rlkey=p28j6u1fl1ubb7bufiq16onbl&st=7aktff85&dl=1"
 unzip /tmp/tiny.zip -d data_raw/shortvideo_tiny/
 \end{lstlisting}
 
-\begin{lstlisting}[language=bash, caption=清華主站（完整版，需帳密）]
+\begin{lstlisting}[language=bash, caption=清華主站（完整版 video\_feature\_total/，擴大工作集用）]
 # 帳號：videodata   密碼：ShortVideo@10000
-# 下載互動主檔（.csv 無連線數限制）
-wget --user=videodata --password='ShortVideo@10000' -c \
+# 下載所有影片的個別特徵（可從 54K 擴大到 ~99K 工作集）
+# 限制最多 3 個同時連線下載 .npy 大檔
+BASE="http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset"
+AUTH="--user=videodata --password=ShortVideo@10000"
+wget $AUTH -c --show-progress \
      -O data_raw/shortvideo_full/interaciton_filtered.csv \
-     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/interaciton_filtered.csv"
-
-# 下載 SBERT 用的標題文字（.txt 無連線數限制）
-wget --user=videodata --password='ShortVideo@10000' -r -np -A "*.txt" \
-     -P data_raw/shortvideo_full/title_en/ \
-     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/title_en/"
-
-# 大型 .npy 檔案（限制 3 個同時連線）
-wget --user=videodata --password='ShortVideo@10000' -c \
-     -O data_raw/shortvideo_full/image_feat.npy \
-     "http://fi.ee.tsinghua.edu.cn/datasets/short-video-dataset/image_feat.npy"
+     "$BASE/interaciton_filtered.csv"
 \end{lstlisting}
-
-\begin{tipbox}[最快提升訓練效果的方式（不需要下載）]
-\texttt{interaction.csv} 裡已有中文 \texttt{title} 欄位，可直接用多語言 SBERT 模型
-重抽 384 維文字特徵，替換目前的 50 維舊版本：
-\begin{lstlisting}[language=bash]
-.venv/bin/python scripts/build_hetero_graph.py --use-sbert
-.venv/bin/python scripts/train_hetero.py --model sage --epochs 300
-\end{lstlisting}
-這不需要下載任何新資料，首次執行會自動下載 SBERT 模型（約 400 MB）。
-\end{tipbox}
 
 % ════════════════════════════════════════════════════
 \section{系統設計：三條平行管線}

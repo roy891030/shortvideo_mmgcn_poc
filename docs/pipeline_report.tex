@@ -24,7 +24,7 @@
 \usepackage{float, caption, subcaption, graphicx}
 \usepackage{enumitem}
 \usepackage{tcolorbox}
-\tcbuselibrary{skins, breakable}
+\tcbuselibrary{skins, breakable, listings}
 \usepackage{fancyhdr}
 \pagestyle{fancy}\fancyhf{}
 \rhead{\small 短影音平台表現預測：技術報告 v2}
@@ -44,17 +44,17 @@
 
 %% ── tcolorbox 樣式 ──────────────────────────────────
 \newtcolorbox{tipbox}[1][]{
-  colback=tipsbox, colframe=authgreen!70, fonttitle=\bfseries,
-  title={#1}, rounded corners, left=4pt, right=4pt}
+  enhanced, colback=tipsbox, colframe=authgreen!70, fonttitle=\bfseries,
+  title={#1}, arc=4pt, left=4pt, right=4pt}
 \newtcolorbox{warnbox2}[1][]{
-  colback=warnbox, colframe=hlgold!80, fonttitle=\bfseries,
-  title={#1}, rounded corners, left=4pt, right=4pt}
+  enhanced, colback=warnbox, colframe=hlgold!80, fonttitle=\bfseries,
+  title={#1}, arc=4pt, left=4pt, right=4pt}
 \newtcolorbox{infobox2}[1][]{
-  colback=infobox, colframe=vidblue!70, fonttitle=\bfseries,
-  title={#1}, rounded corners, left=4pt, right=4pt}
+  enhanced, colback=infobox, colframe=vidblue!70, fonttitle=\bfseries,
+  title={#1}, arc=4pt, left=4pt, right=4pt}
 \newtcolorbox{analogybox}[1][]{
-  colback=gray!6, colframe=gray!40, fonttitle=\bfseries\itshape,
-  title={#1}, rounded corners, breakable}
+  enhanced, colback=gray!6, colframe=gray!40, fonttitle=\bfseries\itshape,
+  title={#1}, arc=4pt, breakable}
 
 %% ── 程式碼樣式 ──────────────────────────────────────
 \lstset{
@@ -259,7 +259,7 @@ Pipeline C 需要兩樣東西：（1）影片的行為標籤（按讚率等）�
 \node[font=\small] at (-1.5, 0) {有行為標籤};
 \node[font=\small] at (-1.5,-0.4) {98,999 部};
 \node[font=\small] at (3.3, 0) {有視覺特徵};
-\node[font=\small] at (3.3,-0.4) {86,578 部};
+\node[font=\small] at (3.3,-0.4) {65,030 部};
 \node[font=\small\bfseries] at (1.2, 0) {工作集};
 \node[font=\small] at (1.2,-0.4) {54,088 部};
 \end{tikzpicture}
@@ -510,8 +510,8 @@ def build_author_features(meta_df, vid_attrs, train_mask):
   (vnew) to[bend left=15] (v2);
 
 \begin{scope}[shift={(0,-4.8)}]
-\draw[-, draw=authgreen, thick] (0,0)--(0.8,0) node[right, font=\scriptsize] {posted\_by：影片→作者};
-\draw[-, draw=catred, thick]    (4,0)--(4.8,0) node[right, font=\scriptsize] {belongs\_to：影片→分類};
+\draw[-, draw=authgreen, thick] (0,0)--(0.8,0) node[right, font=\scriptsize] {posted\_by：影片$\rightarrow$作者};
+\draw[-, draw=catred, thick]    (4,0)--(4.8,0) node[right, font=\scriptsize] {belongs\_to：影片$\rightarrow$分類};
 \draw[<->, dashed, draw=vidblue!70, thick] (8,0)--(8.8,0)
   node[right, font=\scriptsize] {similar\_to：視覺 cosine kNN};
 \end{scope}
@@ -548,8 +548,8 @@ $$\text{cosine}(v, v') = \frac{\mathbf{f}_v \cdot \mathbf{f}_{v'}}{\|\mathbf{f}_
 作者節點 & 34,939 & \\
 分類節點 & 51     & 三級分類體系 \\
 \midrule
-posted\_by 邊（含反向） & 108,176 & 每部影片←→作者 \\
-belongs\_to 邊（含反向）& 108,176 & 每部影片←→分類 \\
+posted\_by 邊（含反向） & 108,176 & 每部影片$\leftrightarrow$作者 \\
+belongs\_to 邊（含反向）& 108,176 & 每部影片$\leftrightarrow$分類 \\
 similar\_to 邊（雙向）  & 942,894 & $k=10$ cosine kNN \\
 \textbf{邊的總數} & \textbf{1,159,246} & \\
 \bottomrule
@@ -577,15 +577,15 @@ similar\_to 邊（雙向）  & 942,894 & $k=10$ cosine kNN \\
 \node[layerbox, below=of input] (proj)
   {\textbf{輸入投影}（統一維度）\\
   \footnotesize Linear($-1$, 128) 對影片/作者；Embedding(51, 128) 對分類\\
-  → 所有節點都變成 128 維};
+  $\Rightarrow$ 所有節點都變成 128 維};
 \node[layerbox, below=of proj, draw=vidblue!60, fill=vidblue!8] (conv1)
   {\textbf{HeteroConv 第 1 層}（1 跳訊息傳遞）\\
   \footnotesize 每個節點收集所有直接鄰居的 128 維向量，加總後更新自己\\
-  → 影片「知道」作者、分類、相似影片的原始特徵；ReLU + Dropout};
+  $\Rightarrow$ 影片「知道」作者、分類、相似影片的原始特徵；ReLU + Dropout};
 \node[layerbox, below=of conv1, draw=vidblue!60, fill=vidblue!8] (conv2)
   {\textbf{HeteroConv 第 2 層}（2 跳訊息傳遞）\\
   \footnotesize 再收集一次——現在鄰居的向量已包含了它的鄰居的信息\\
-  → 影片的感受野擴展到 2 跳以內的所有節點；ReLU + Dropout};
+  $\Rightarrow$ 影片的感受野擴展到 2 跳以內的所有節點；ReLU + Dropout};
 \node[layerbox, below=of conv2, draw=catred!60, fill=catred!8] (head)
   {\textbf{輸出頭（只取影片節點）}\\
   \footnotesize $\mathbf{h}_v^{(2)}$ [128 維] → Linear(128,64) → ReLU → Linear(64,8)};
@@ -684,10 +684,10 @@ similar\_to 邊（雙向）  & 942,894 & $k=10$ cosine kNN \\
 \caption{GraphSAGE（預設）vs HGT（消融用）}
 \begin{tabular}{lll}
 \toprule
-\textbf{面向} & \textbf{GraphSAGE（--model sage）} & \textbf{HGT（--model hgt）} \\
+\textbf{面向} & \textbf{GraphSAGE（\texttt{-{}-model sage}）} & \textbf{HGT（\texttt{-{}-model hgt}）} \\
 \midrule
 聚合方式 & 鄰域平均（簡單直接） & 注意力加權（讓模型決定聽誰的）\\
-直覺解釋 & 「等量採納所有鄰居意見」 & 「根據內容決定聽哪個鄰居的話」\\
+直覺解釋 & 等量採納所有鄰居意見 & 根據內容決定聽哪個鄰居的話\\
 泛化能力 & 強（推薦用於冷啟動） & 中等 \\
 計算成本 & 低 & 高（4 個注意力頭）\\
 \bottomrule
@@ -862,7 +862,7 @@ HeteroGNN 的觀看時長 MAE（386 秒）遠高於 LightGBM（24 秒），
 \paragraph{2. Category 三層階層嵌入}
 圖中已存 \texttt{category.hier}（含 leaf/parent/root 三層索引），
 但模型只用了單一嵌入。應改為三層各自一個 Embedding 後拼接，
-充分利用「這個分類→它的父分類→根分類」的語義層次。
+充分利用「這個分類$\rightarrow$它的父分類$\rightarrow$根分類」的語義層次。
 
 \subsection*{中優先：提升模型能力}
 

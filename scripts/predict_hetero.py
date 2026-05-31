@@ -122,14 +122,34 @@ def extract_vit_video(video_path: str, n_frames: int = NUM_VIT_FRAMES) -> np.nda
     return np.mean(frame_feats, axis=0).astype(np.float32)   # [768]
 
 
-def extract_text_feature(title: str) -> np.ndarray:
-    """Encode text with SBERT (384-dim) or return zeros (50-dim fallback)."""
-    try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-        return model.encode([title], convert_to_numpy=True)[0].astype(np.float32)
-    except Exception as e:
-        print(f"  [WARN] SBERT failed ({e}); returning zero text feature")
+def extract_text_feature(title: str, expected_text_dim: int = 50) -> np.ndarray:
+    """Encode text matching the exact dimension used when building the graph.
+
+    The training graph stores text features at a fixed dimension (50 or 384).
+    This function MUST produce the same dimension, otherwise the assert in
+    predict_from_raw will fail.
+
+    - expected_text_dim == 384: use SBERT (graph was built with --use-sbert)
+    - expected_text_dim == 50 : return zero vector (the pre-extracted 50-dim
+      features in text_feat.npy were computed offline; we cannot reproduce them
+      from title text alone, so we use zeros as a placeholder)
+    """
+    if expected_text_dim == 384:
+        try:
+            from sentence_transformers import SentenceTransformer
+            sbert = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+            return sbert.encode([title], convert_to_numpy=True)[0].astype(np.float32)
+        except Exception as e:
+            print(f"  [WARN] SBERT failed ({e}); falling back to zeros")
+            return np.zeros(384, dtype=np.float32)
+    else:
+        # Graph was built with the pre-extracted 50-dim text_feat.npy.
+        # We cannot reproduce those exact features from title text alone,
+        # so we use a zero vector (same as videos that had no text in training).
+        if title:
+            print(f"  [NOTE] Graph uses 50-dim text features (not SBERT). "
+                  "Text '{title[:30]}...' replaced with zero vector. "
+                  "Rebuild graph with --use-sbert for better text signal.")
         return np.zeros(50, dtype=np.float32)
 
 
@@ -186,10 +206,12 @@ def predict_from_raw(args: argparse.Namespace) -> None:
         raise ValueError("Provide --cover or --video for from-raw mode.")
     print(f"  visual dim: {vis.shape[0]}")
 
-    # ── 2. Text feature ─────────────────────────────────────────────────────
+    # ── 2. Text feature (dimension MUST match how the graph was built) ─────────
+    # Infer expected text dim from graph: total - visual(768) - duration(1)
+    expected_text_dim = expected_feat_dim - 768 - 1
     title = args.title or ""
-    txt = extract_text_feature(title)
-    print(f"  text dim: {txt.shape[0]}")
+    txt = extract_text_feature(title, expected_text_dim=expected_text_dim)
+    print(f"  text dim: {txt.shape[0]}  (graph expects {expected_text_dim})")
 
     # ── 3. Duration ─────────────────────────────────────────────────────────
     duration = float(args.duration) if args.duration else 60.0

@@ -21,6 +21,16 @@ MMRec/src/saved/
 data_processed/behavior/hetero_graph.pt
 data_processed/behavior/models_gnn/best_model.pt
 
+# LaTeX compilation artifacts
+docs/*.aux
+docs/*.out
+docs/*.toc
+docs/*.log
+docs/*.synctex.gz
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.pdf
+
 # Nested repo internals are kept as cloned dependencies.
 MMRec/
 ShortVideo_dataset/

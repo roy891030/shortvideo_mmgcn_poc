@@ -25,6 +25,7 @@
 \tcbuselibrary{skins, breakable, listings}
 \usepackage{fancyhdr}
 \pagestyle{fancy}\fancyhf{}
+\setlength{\headheight}{13.6pt}\addtolength{\topmargin}{-1.6pt}
 \rhead{\small ShortVideo 平台表現預測：技術報告 v3}
 \lhead{\small \leftmark}\cfoot{\thepage}
 
@@ -63,7 +64,7 @@
 %% ── TikZ 樣式 ──
 \tikzset{
   vidnode/.style={draw=vidblue,fill=vidblue!15,rounded corners=4pt,
-    minimum width=1.9cm,minimum height=0.7cm,font=\small\bfseries,text=darktext},
+    minimum width=1.9cm,minimum height=0.7cm,font=\small\bfseries,text=darktext,align=center},
   authnode/.style={draw=authgreen,fill=authgreen!15,rectangle,
     minimum width=1.9cm,minimum height=0.7cm,font=\small\bfseries,text=darktext},
   catnode/.style={draw=catred,fill=catred!15,diamond,aspect=2.2,
@@ -284,6 +285,7 @@ $\mathcal{G}_m$ 是模態 $m$ 的使用者-影片圖，$\mathbf{F}^m$ 是對應�
 \centering
 \caption{ShortVideo 資料集上 8 種推薦算法的基準測試結果（來源：\citealt{shang2025shortvideo} Table 1）}
 \label{tab:original_results}
+\footnotesize
 \begin{tabular}{lcccc}
 \toprule
 \textbf{模型} & \textbf{Recall@10} & \textbf{Recall@20} & \textbf{NDCG@10} & \textbf{NDCG@20} \\
@@ -329,6 +331,7 @@ LGMRec \citep{guo2024lgmrec}     & 0.0159 & 0.0257 & 0.0131 & 0.0162 \\
 \begin{table}[H]
 \centering
 \caption{以日期切分模擬冷啟動場景（前 5 天訓練，後 2 天測試）}
+\small
 \begin{tabular}{lrl}
 \toprule
 \textbf{項目} & \textbf{數量} & \textbf{說明} \\
@@ -370,6 +373,7 @@ LGMRec \citep{guo2024lgmrec}     & 0.0159 & 0.0257 & 0.0131 & 0.0162 \\
 \begin{table}[H]
 \centering
 \caption{ShortVideo 資料集的互動矩陣稀疏性}
+\small
 \begin{tabular}{lrl}
 \toprule
 \textbf{項目} & \textbf{數量} & \\
@@ -477,6 +481,7 @@ GNN 透過訊息傳遞把這類\textbf{鄰域信號}傳入目標影片，
 \centering
 \caption{所有資料檔案的確切規格（實際讀取驗證）}
 \label{tab:files}
+\footnotesize
 \begin{tabular}{llrll}
 \toprule
 \textbf{檔案} & \textbf{格式} & \textbf{大小} & \textbf{Shape / 行數} & \textbf{誰使用} \\
@@ -507,7 +512,7 @@ Pipeline C 使用的是 768 維的 \texttt{image\_feat.npy}。
 \caption{\texttt{interaction.csv} 欄位完整說明}
 \label{tab:inter_fields}
 \footnotesize
-\begin{tabular}{llll}
+\begin{tabular}{lll>{\raggedright\arraybackslash}p{5cm}}
 \toprule
 \textbf{欄位} & \textbf{型態} & \textbf{第一行範例} & \textbf{說明} \\
 \midrule
@@ -725,7 +730,8 @@ Pipeline B 是非圖基線；Pipeline C 重新定義任務框架，移除使用�
 \begin{table}[H]
 \centering
 \caption{三種節點類型：數量、特徵維度與來源}
-\begin{tabular}{llrl}
+\footnotesize
+\begin{tabular}{llr>{\raggedright\arraybackslash}p{5.5cm}}
 \toprule
 \textbf{節點類型} & \textbf{數量} & \textbf{特徵維度} & \textbf{特徵來源} \\
 \midrule
@@ -896,7 +902,7 @@ $\sigma$ 為 ReLU。
 \node[vidnode,very thick,fill=vidblue!45] (v2) at (5.5,-0.6)
   {新影片 $v_?$\\\small $\mathbf{h}^{(2)}$（2跳）};
 \draw[arrowstyle,very thick] (v1)--(v2)
-  node[midway,right,font=\scriptsize,text=gray]{Layer 2\\再聚合};
+  node[midway,right,font=\scriptsize,text=gray,align=center]{Layer 2\\再聚合};
 
 \node[draw=hlgold!80,fill=hlgold!15,rounded corners=3pt,
       font=\small,align=center,minimum width=2.5cm] (out) at (5.5,-2.5)
@@ -972,9 +978,9 @@ Huber 損失在誤差小時用平方、誤差大時改線性，兼顧準確性�
 \fill[vidblue!50, rounded corners=3pt] (0.1,0.1) rectangle (8.4,1.1);
 \node[font=\footnotesize,text=white] at (4.25,0.6) {訓練集 43,270（80\%）};
 \fill[authgreen!50, rounded corners=3pt] (8.5,0.1) rectangle (9.45,1.1);
-\node[font=\scriptsize,text=white] at (8.97,0.6) {驗\\5,408};
+\node[font=\scriptsize,text=white,align=center] at (8.97,0.6) {驗\\5,408};
 \fill[catred!50, rounded corners=3pt] (9.55,0.1) rectangle (10.4,1.1);
-\node[font=\scriptsize,text=white] at (9.97,0.6) {測\\5,410};
+\node[font=\scriptsize,text=white,align=center] at (9.97,0.6) {測\\5,410};
 \draw[red!70!black,very thick,dashed] (8.45,-0.4)--(8.45,3.0)
   node[above,font=\small,text=red!70!black]{標籤洩漏屏障};
 \node[draw=authgreen,fill=authgreen!10,rounded corners=4pt,
@@ -1025,6 +1031,7 @@ Ubuntu RTX 4090 & 68 & \textbf{1 秒} & \textbf{0.256} & \textbf{386} \\
 \centering
 \caption{HeteroGNN vs LightGBM——Spearman 與 MAE（測試集，5,410 部影片）}
 \label{tab:results}
+\small
 \begin{tabular}{lrrrr}
 \toprule
 & \multicolumn{2}{c}{\textbf{Spearman↑}} & \multicolumn{2}{c}{\textbf{MAE↓}} \\
@@ -1070,8 +1077,9 @@ GNN 的 mean\_watch\_time MAE 遠高於 LightGBM（386 秒 vs 24 秒），
 \subsection*{高優先：功能補全}
 
 \paragraph{冷啟動推論的精確作者/分類節點對應}
-目前 from-raw 模式的 \texttt{--author-id} 和 \texttt{--category-id} 因建圖時對應字典
-未持久化只能退回 kNN fallback。需儲存 \texttt{hetero\_graph\_meta.pkl}。
+目前 from-raw 模式的 \texttt{--author-id} 和 \texttt{--category-id}，
+因建圖時對應字典未持久化，只能退回 kNN fallback。
+需儲存 \texttt{hetero\_graph\_\allowbreak{}meta.pkl}。
 
 \paragraph{Category 三層階層嵌入啟用}
 \texttt{category.hier}（leaf/parent/root 三層）已存在圖中，但模型只用單一嵌入。
@@ -1136,8 +1144,8 @@ $\mathcal{L} = \sum_k \frac{1}{2\sigma_k^2}\mathcal{L}_k + \log\sigma_k$，
 \begin{enumerate}
 \item \textbf{任務重定義}：從個人化推薦（排名）改為影片全平台指標預測（節點回歸），
   移除使用者節點，以冷啟動為設計核心。
-\item \textbf{架構驗證}：Pipeline C 在 RTX 4090 上的實驗表明，
-  異質圖結構在 \texttt{mean\_watch\_time} 的排名相關性上實現 4 倍以上提升
+\item \textbf{架構驗證}：Pipeline C 在 RTX 4090 實驗中，異質圖結構
+  在 \texttt{mean\_watch\_time} 排名相關性上實現 4 倍以上提升
   （Spearman $0.047 \to 0.256$）。
 \item \textbf{端對端實作}：完整實作從建圖、訓練、到冷啟動 from-raw 推論的 pipeline，
   修復維度不符的 bug，驗證真實 .mp4 輸入可直接推論。

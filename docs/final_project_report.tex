@@ -343,6 +343,93 @@ LightGCN 透過圖結構傳遞二跳、三跳以上的高階協同信號，
 同時預測多個人氣相關指標。這兩項工作\textbf{不依賴使用者互動記錄}，
 與本研究的核心設計哲學一致，是未來比較的主要對象。
 
+\subsection{異質圖神經網路：GraphSAGE 與 HGT}
+
+推薦系統的 GNN（LightGCN、MMGCN）都建立在\textbf{同質圖}上（節點類型相同），
+而本研究的圖同時含有「影片」、「作者」、「分類」三種節點，
+必須使用能處理多種節點與邊類型的\textbf{異質圖神經網路}。
+
+\subsubsection{GraphSAGE：歸納式均值聚合}
+
+\citet{hamilton2017inductive} 提出 GraphSAGE，其核心創新是\textbf{歸納學習}：
+訓練完成後，對訓練期從未出現的新節點也能產生有意義的 embedding，
+這正是無歷史資料推論的理論基礎。
+
+GraphSAGE 的單層更新採用鄰域均值聚合再與自身特徵拼接：
+\begin{equation}
+  \mathbf{h}_v^{(\ell+1)} =
+  \sigma\!\Bigl(
+    \mathbf{W}^{(\ell)} \cdot
+    \mathrm{CONCAT}\!\Bigl(
+      \mathbf{h}_v^{(\ell)},\;
+      \frac{1}{|\mathcal{N}(v)|}
+      \sum_{u\in\mathcal{N}(v)} \mathbf{h}_u^{(\ell)}
+    \Bigr)
+  \Bigr)
+  \label{eq:graphsage_orig}
+\end{equation}
+其中 $\mathbf{W}^{(\ell)}$ 是可學習投影矩陣，$\sigma$ 為 ReLU。
+
+本研究將此框架擴展為\textbf{異質版本}：對每種邊關係 $r\in\mathcal{R}$
+各設一組獨立投影矩陣 $\mathbf{W}_r^{(\ell)}$，再加總各關係的鄰域均值：
+\begin{equation}
+  \mathbf{h}_v^{(\ell+1)} =
+  \sigma\!\Biggl(
+    \mathbf{W}_{\mathrm{self}}^{(\ell)} \mathbf{h}_v^{(\ell)}
+    + \sum_{r\in\mathcal{R}}
+      \mathbf{W}_r^{(\ell)}
+      \frac{1}{|\mathcal{N}_r(v)|}
+      \sum_{u\in\mathcal{N}_r(v)} \mathbf{h}_u^{(\ell)}
+  \Biggr)
+  \label{eq:hetero_sage}
+\end{equation}
+每種邊（\texttt{posted\_by}、\texttt{belongs\_to}、\texttt{similar\_to}
+及各自反向邊，共 5 種）獨立傳遞信號，不同語意的鄰域不會互相干擾。
+
+\subsubsection{HGT：異質注意力聚合}
+
+\citet{hu2020heterogeneous} 的 HGT 以\textbf{多頭注意力}取代均值，
+讓模型自動學習「哪個鄰居更值得參考」：
+\begin{equation}
+  \mathbf{h}_v^{(\ell+1)} =
+  \sigma\!\Biggl(
+    \sum_{r\in\mathcal{R}}
+    \sum_{u\in\mathcal{N}_r(v)}
+      \alpha_{u\to v}^{(r,\ell)} \cdot
+      \mathbf{W}_r^{V,(\ell)} \mathbf{h}_u^{(\ell)}
+  \Biggr)
+  \label{eq:hgt_review}
+\end{equation}
+注意力係數由查詢（Query）與鍵（Key）的縮放點積計算：
+\begin{equation}
+  \alpha_{u\to v}^{(r,\ell)} \propto
+  \exp\!\left(
+    \frac{
+      \bigl(\mathbf{W}_r^{Q,(\ell)}\mathbf{h}_v^{(\ell)}\bigr)^\top
+      \bigl(\mathbf{W}_r^{K,(\ell)}\mathbf{h}_u^{(\ell)}\bigr)
+    }{\sqrt{d/H}}
+  \right)
+  \label{eq:hgt_attn_review}
+\end{equation}
+其中 $d$ 為隱藏維度，$H$ 為注意力頭數（本研究設 $H=4$）。
+
+\begin{table}[H]
+\centering
+\caption{GraphSAGE 與 HGT 的特性比較}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{面向} & \textbf{GraphSAGE} & \textbf{HGT} \\
+\midrule
+聚合方式 & 等權鄰域均值 & 多頭注意力加權 \\
+鄰居貢獻 & 每個鄰居等量採納 & 根據內容動態加權 \\
+歸納學習（新節點） & \textbf{強}（設計核心） & 中 \\
+計算複雜度 & 低 & 高（$O(|\mathcal{E}| \cdot H)$）\\
+參數量 & 少 & 多 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{現有方法的不足與本研究的定位}
 
 \begin{table}[H]
@@ -358,7 +445,8 @@ LightGCN          & \texttimes & \texttimes & \texttimes \\
 MMGCN             & $\triangle$ & \texttimes & \texttimes \\
 BM3               & $\triangle$ & \texttimes & \texttimes \\
 MMVED / HMMVED    & \checkmark & \checkmark & \checkmark \\
-\textbf{本研究（HeteroGNN）}& \checkmark & \checkmark & \checkmark \\
+GraphSAGE（本研究預設）& \checkmark & \checkmark & \checkmark \\
+HGT（本研究對照）  & \checkmark & \checkmark & \checkmark \\
 \bottomrule
 \multicolumn{4}{l}{\footnotesize \texttimes：不支援；$\triangle$：部分緩解；\checkmark：完整支援}
 \end{tabular}
@@ -367,6 +455,8 @@ MMVED / HMMVED    & \checkmark & \checkmark & \checkmark \\
 本研究與 MMVED 的核心差異在於：
 本研究額外建立了\textbf{異質圖結構}，讓影片能透過作者節點和分類節點
 借用鄰域的歷史表現作為無歷史資料推論的輔助信號，而非僅依賴影片自身的內容特徵。
+相較於 LightGCN 等推薦系統 GNN，GraphSAGE 的歸納學習能力使其天然適合
+新節點（無歷史資料影片）的推論場景。
 
 %% ════════════════════════════════════════════════════════════════
 \section{實驗方法}
@@ -821,6 +911,11 @@ MAE 過高的問題可以透過事後輸出校準（isotonic regression 或 Plat
 %% ════════════════════════════════════════════════════════════════
 \bibliographystyle{abbrvnat}
 \begin{thebibliography}{99}
+
+\bibitem[Hamilton et al.(2017)]{hamilton2017inductive}
+Hamilton, W., Ying, Z., and Leskovec, J.
+\newblock \emph{Inductive Representation Learning on Large Graphs}.
+\newblock \textit{NeurIPS}, 2017.
 
 \bibitem[He et al.(2020)]{he2020lightgcn}
 He, X., Deng, K., Wang, X., Li, Y., Zhang, Y., and Wang, M.

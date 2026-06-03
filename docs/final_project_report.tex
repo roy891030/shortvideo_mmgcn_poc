@@ -209,7 +209,7 @@ Recall@10 = 0.0238、NDCG@10 = 0.0178。
 \midrule
 訓練期（前 5 天）影片 & 138,768 & 有互動記錄，可訓練 embedding \\
 測試期（後 2 天）影片 & 69,094  & 需要預測 \\
-\textbf{無歷史資料影片}（訓練期未見）& \textbf{14,793} & 任何 CF 方法均無法預測 \\
+\textbf{無歷史資料影片}（訓練期未見）& \textbf{14,793} & 任何協同過濾方法均無法預測 \\
 \midrule
 \textbf{無歷史資料比例} & \textbf{21.4\%} & 每 5 支測試影片就有 1 支 \\
 \bottomrule
@@ -221,24 +221,15 @@ Recall@10 = 0.0238、NDCG@10 = 0.0178。
 \begin{definebox}[稀疏度的影響]
 矩陣稀疏度 99.93\% 意味著：即使對已出現在訓練集的影片，
 其互動記錄也可能只有 $1$--$2$ 人，統計上極不穩定。
-這是 BM3 的最佳 Recall@10 只有 2.38\% 的根本原因——
-協同過濾在稀疏資料上的天花板很低。
+在此高度稀疏的互動矩陣下，協同過濾方法的排名預測能力受到根本性限制，
+此為即便是最優基準模型 BM3 其 Recall@10 亦僅達 2.38\% 的核心成因。
 \end{definebox}
-
-\subsubsection{侷限三：7 種行為信號的浪費}
-
-資料集最大的貢獻之一是同時記錄了 7 種細粒度行為。
-然而，所有基準推薦算法都只把「是否有互動」作為訓練信號，
-\textbf{完全忽略}了行為類型的差異。
-\texttt{like\_rate} 反映社群認同，\texttt{effective\_view\_rate} 反映主動選擇，
-\texttt{mean\_watch\_time} 直接反映內容吸引力——
-三者的預測難度與信號來源截然不同，應該分開對待。
 
 \subsection{研究問題的精確定義}
 
 \begin{keybox}[研究問題（Research Question）]
 在不依賴任何使用者互動歷史的前提下，能否透過建立以\textbf{影片為中心的異質圖}，
-讓圖神經網路的訊息傳遞有效融合「作者背景信號」、「分類基準信號」
+讓圖神經網路的訊息傳遞有效融合「作者背景訊號」、「分類基準訊號」
 和「視覺相似影片的歷史表現」，使上架前表現預測
 （特別是 \texttt{mean\_watch\_time}）在排名能力（Spearman）上
 優於純特徵的非圖基準模型（LightGBM）？
@@ -305,7 +296,7 @@ $\mathcal{G} = (\mathcal{U}\cup\mathcal{I},\,\mathcal{O}^+)$，
   \label{eq:lightgcn_final}
 \end{equation}
 
-LightGCN 透過圖結構傳遞二跳、三跳以上的高階協同信號，
+LightGCN 透過圖結構傳遞二跳、三跳以上的高階協同訊號，
 在稀疏資料上顯著優於 BPR（Recall@10：0.0223 vs 0.0113）。
 但其本質仍是協同過濾——新影片沒有邊，
 訊息傳遞無法作用於它，上架前表現預測問題依舊無解。
@@ -343,13 +334,33 @@ LightGCN 透過圖結構傳遞二跳、三跳以上的高階協同信號，
 同時預測多個人氣相關指標。這兩項工作\textbf{不依賴使用者互動記錄}，
 與本研究的核心設計哲學一致，是未來比較的主要對象。
 
-\subsection{異質圖神經網路：GraphSAGE 與 HGT}
+\subsection{梯度提升決策樹：LightGBM}
+
+\citet{ke2017lightgbm} 提出的 LightGBM 是梯度提升決策樹的高效實現，
+在表格型資料的回歸與排名任務上表現優異。
+與所有協同過濾方法不同，LightGBM 的預測\textbf{僅依賴輸入特徵向量}，
+不需要使用者互動歷史，因此天然支援無歷史資料情境下的上架前表現預測。
+
+給定影片特徵向量 $\mathbf{x}_v \in \mathbb{R}^{819}$，LightGBM 透過
+$T$ 棵決策樹的加總輸出單一指標的預測值：
+\begin{equation}
+  \hat{y} = \sum_{t=1}^{T} f_t(\mathbf{x}_v),
+  \quad f_t \in \mathcal{F}
+  \label{eq:lightgbm}
+\end{equation}
+其中 $\mathcal{F}$ 為回歸樹的函數空間，每棵樹 $f_t$ 透過梯度提升疊代學習。
+本研究對 8 個目標指標分別訓練獨立的 LightGBM 模型。
+
+\textbf{LightGBM 的根本侷限}：它只能利用影片\textbf{自身}的特徵，
+無法取得跨影片的關聯性訊號——例如「同一作者的歷史作品表現如何」
+或「視覺風格最相似的影片有多少人看完」。
+這些資訊需要圖結構才能取得，正是本研究引入異質圖神經網路的核心動機。
+
+\subsection{異質圖神經網路：GraphSAGE}
 
 推薦系統的 GNN（LightGCN、MMGCN）都建立在\textbf{同質圖}上（節點類型相同），
 而本研究的圖同時含有「影片」、「作者」、「分類」三種節點，
 必須使用能處理多種節點與邊類型的\textbf{異質圖神經網路}。
-
-\subsubsection{GraphSAGE：歸納式均值聚合}
 
 \citet{hamilton2017inductive} 提出 GraphSAGE，其核心創新是\textbf{歸納學習}：
 訓練完成後，對訓練期從未出現的新節點也能產生有意義的 embedding，
@@ -384,79 +395,35 @@ GraphSAGE 的單層更新採用鄰域均值聚合再與自身特徵拼接：
   \label{eq:hetero_sage}
 \end{equation}
 每種邊（\texttt{posted\_by}、\texttt{belongs\_to}、\texttt{similar\_to}
-及各自反向邊，共 5 種）獨立傳遞信號，不同語意的鄰域不會互相干擾。
-
-\subsubsection{HGT：異質注意力聚合}
-
-\citet{hu2020heterogeneous} 的 HGT 以\textbf{多頭注意力}取代均值，
-讓模型自動學習「哪個鄰居更值得參考」：
-\begin{equation}
-  \mathbf{h}_v^{(\ell+1)} =
-  \sigma\!\Biggl(
-    \sum_{r\in\mathcal{R}}
-    \sum_{u\in\mathcal{N}_r(v)}
-      \alpha_{u\to v}^{(r,\ell)} \cdot
-      \mathbf{W}_r^{V,(\ell)} \mathbf{h}_u^{(\ell)}
-  \Biggr)
-  \label{eq:hgt_review}
-\end{equation}
-注意力係數由查詢（Query）與鍵（Key）的縮放點積計算：
-\begin{equation}
-  \alpha_{u\to v}^{(r,\ell)} \propto
-  \exp\!\left(
-    \frac{
-      \bigl(\mathbf{W}_r^{Q,(\ell)}\mathbf{h}_v^{(\ell)}\bigr)^\top
-      \bigl(\mathbf{W}_r^{K,(\ell)}\mathbf{h}_u^{(\ell)}\bigr)
-    }{\sqrt{d/H}}
-  \right)
-  \label{eq:hgt_attn_review}
-\end{equation}
-其中 $d$ 為隱藏維度，$H$ 為注意力頭數（本研究設 $H=4$）。
-
-\begin{table}[H]
-\centering
-\caption{GraphSAGE 與 HGT 的特性比較}
-\small
-\begin{tabular}{lll}
-\toprule
-\textbf{面向} & \textbf{GraphSAGE} & \textbf{HGT} \\
-\midrule
-聚合方式 & 等權鄰域均值 & 多頭注意力加權 \\
-鄰居貢獻 & 每個鄰居等量採納 & 根據內容動態加權 \\
-歸納學習（新節點） & \textbf{強}（設計核心） & 中 \\
-計算複雜度 & 低 & 高（$O(|\mathcal{E}| \cdot H)$）\\
-參數量 & 少 & 多 \\
-\bottomrule
-\end{tabular}
-\end{table}
+及各自反向邊，共 5 種）獨立傳遞訊號，不同語意的鄰域不會互相干擾。
 
 \subsection{現有方法的不足與本研究的定位}
 
 \begin{table}[H]
 \centering
-\caption{各方法對三個核心要求的支援狀況}
+\caption{各方法對四個核心要求的支援狀況}
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{方法} & \textbf{上架前預測} & \textbf{全平台指標} & \textbf{不需使用者歷史} \\
+\textbf{方法} & \textbf{上架前預測} & \textbf{全平台指標} & \textbf{不需使用者歷史} & \textbf{圖鄰域訊號} \\
 \midrule
-BPR               & \texttimes & \texttimes & \texttimes \\
-LightGCN          & \texttimes & \texttimes & \texttimes \\
-MMGCN             & $\triangle$ & \texttimes & \texttimes \\
-BM3               & $\triangle$ & \texttimes & \texttimes \\
-MMVED / HMMVED    & \checkmark & \checkmark & \checkmark \\
-GraphSAGE（本研究預設）& \checkmark & \checkmark & \checkmark \\
-HGT（本研究對照）  & \checkmark & \checkmark & \checkmark \\
+BPR               & \texttimes & \texttimes & \texttimes & \texttimes \\
+LightGCN          & \texttimes & \texttimes & \texttimes & $\triangle$ \\
+MMGCN             & $\triangle$ & \texttimes & \texttimes & $\triangle$ \\
+BM3               & $\triangle$ & \texttimes & \texttimes & $\triangle$ \\
+MMVED / HMMVED    & \checkmark & \checkmark & \checkmark & \texttimes \\
+LightGBM（直接基準）& \checkmark & \checkmark & \checkmark & \texttimes \\
+\textbf{本研究（HeteroGNN）}& \checkmark & \checkmark & \checkmark & \checkmark \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize \texttimes：不支援；$\triangle$：部分緩解；\checkmark：完整支援}
+\multicolumn{5}{l}{\footnotesize \texttimes：不支援；$\triangle$：部分；\checkmark：完整支援}
 \end{tabular}
 \end{table}
 
-本研究與 MMVED 的核心差異在於：
-本研究額外建立了\textbf{異質圖結構}，讓影片能透過作者節點和分類節點
-借用鄰域的歷史表現作為無歷史資料推論的輔助信號，而非僅依賴影片自身的內容特徵。
-相較於 LightGCN 等推薦系統 GNN，GraphSAGE 的歸納學習能力使其天然適合
-新節點（無歷史資料影片）的推論場景。
+表中清楚呈現本研究與 LightGBM 的根本差異：兩者同樣支援上架前表現預測、
+全平台指標、以及不需使用者歷史，但 LightGBM 無法利用\textbf{圖鄰域訊號}。
+本研究正是透過建立以影片為中心的異質圖，讓 HeteroGNN 能從作者節點和分類節點
+借用鄰域的歷史表現作為無歷史資料推論的輔助訊號，
+從而在 \texttt{mean\_watch\_time} 的排名預測上顯著超越 LightGBM。
 
 %% ════════════════════════════════════════════════════════════════
 \section{實驗方法}
@@ -468,9 +435,9 @@ HGT（本研究對照）  & \checkmark & \checkmark & \checkmark \\
 \begin{itemize}[leftmargin=*]
 \item \texttt{interaction.csv}（1.42 GB）：6,767,010 行，28 欄，
       包含使用者、影片、行為與屬性資訊；
-\item \texttt{image\_feat.npy}（471 MB）：$153561\times768$ 矩陣，
+\item \texttt{image\_feat.npy}（471 MB）：$153{,}561\times768$ 矩陣，
       ViT-B/16 視覺特徵；
-\item \texttt{text\_feat.npy}（61 MB）：$153561\times50$ 矩陣，
+\item \texttt{text\_feat.npy}（61 MB）：$153{,}561\times50$ 矩陣，
       SBERT 文字特徵；
 \item \texttt{pids.txt}（1.2 MB）：153,561 行，記錄矩陣行號對應的影片 pid。
 \end{itemize}
@@ -506,7 +473,7 @@ pids.txt 的 153,561 行中，66,983 行（43.6\%）記錄為 $-1$（無對應�
 \State 拼接特徵：$X_v = [\underbrace{\mathbf{f}_v^{\mathrm{img}}}_{768},\,
                           \underbrace{\mathbf{f}_v^{\mathrm{txt}}}_{50},\,
                           \underbrace{\log(1+d_v)}_{1}] \in \mathbb{R}^{819}$
-\State 儲存 $X \in \mathbb{R}^{54088\times819}$，$Y \in \mathbb{R}^{54088\times8}$
+\State 儲存 $X \in \mathbb{R}^{54{,}088\times819}$，$Y \in \mathbb{R}^{54{,}088\times8}$
 \end{algorithmic}
 \end{algorithm}
 
@@ -548,7 +515,7 @@ pids.txt 的 153,561 行中，66,983 行（43.6\%）記錄為 $-1$（無對應�
 \draw[-Stealth,draw=vidblue!60,thick,densely dashed] (vnew)to[bend left=15](v2);
 \end{tikzpicture}
 \caption{本研究異質圖結構示意。加粗藍框為無歷史資料的新影片——即使沒有互動記錄，
-仍可透過 cosine kNN 從視覺相似的老影片借用歷史信號。}
+仍可透過 cosine kNN 從視覺相似的老影片借用歷史訊號。}
 \label{fig:graph_structure}
 \end{figure}
 
@@ -622,7 +589,7 @@ def build_author_features(meta_df, train_mask):
 建立 \texttt{similar\_to} 邊時只需影片的視覺特徵（768 維），
 不需要任何互動記錄。因此，即使是全新的、無歷史資料的影片，
 也能找到 $k=10$ 支視覺上最相似的老影片，
-透過 GNN 訊息傳遞從這些老影片的歷史表現中借用信號。
+透過 GNN 訊息傳遞從這些老影片的歷史表現中借用訊號。
 
 演算法~\ref{alg:graph} 描述完整的建圖流程：
 
@@ -633,7 +600,7 @@ def build_author_features(meta_df, train_mask):
 \Require 有效樣本集 54,088 部影片的特徵向量、影片屬性表（pid、作者 ID、分類 ID）、interaction.csv
 \Ensure PyG HeteroData 物件（hetero\_graph.pt）
 \LineComment{節點特徵初始化}
-\State video.x $\leftarrow X \in \mathbb{R}^{54088\times819}$
+\State video.x $\leftarrow X \in \mathbb{R}^{54{,}088\times819}$
 \State 從 interaction.csv 統計作者粉絲數、作品數和訓練集指標均值
 \State author.x $\leftarrow \mathbb{R}^{34939\times10}$
 \State category.x $\leftarrow$ 可學習 Embedding（51, 128），隨訓練更新
@@ -646,8 +613,8 @@ def build_author_features(meta_df, train_mask):
   \State 從 interaction.csv 讀取 \texttt{category\_id}，建立邊 $(v \to c)$
 \EndFor
 \LineComment{similar\_to 邊（cosine kNN）}
-\State $F \leftarrow$ 正規化後的視覺特徵矩陣 $\in \mathbb{R}^{54088\times768}$
-\State $S \leftarrow F F^\top \in \mathbb{R}^{54088\times54088}$（cosine 相似度）
+\State $F \leftarrow$ 正規化後的視覺特徵矩陣 $\in \mathbb{R}^{54{,}088\times768}$
+\State $S \leftarrow F F^\top \in \mathbb{R}^{54{,}088\times54{,}088}$（cosine 相似度）
 \For{每部影片 $v$}
   \State $\mathcal{N}(v) \leftarrow \mathrm{top\text{-}}10$ 相似影片（排除自身）
   \State 建立雙向邊 $(v \leftrightarrow u)$，$\forall u\in\mathcal{N}(v)$
@@ -666,7 +633,7 @@ def build_author_features(meta_df, train_mask):
 \begin{tikzpicture}[node distance=0.6cm]
 \node[layerbox] (input)
   {\textbf{輸入層}\\
-   \footnotesize video.x $[54088,819]$，author.x $[34939,10]$，category.emb $[51,128]$};
+   \footnotesize video.x $[54{,}088,\;819]$，author.x $[34{,}939,\;10]$，category.emb $[51,\;128]$};
 \node[layerbox, below=of input] (proj)
   {\textbf{輸入投影層}（Linear + ReLU）\\
    \footnotesize video/author：Linear($d_{\mathrm{in}}$, 128)；category：Embedding(51, 128)\\
@@ -725,35 +692,6 @@ def build_author_features(meta_df, train_mask):
 \item 直接鄰居（作者、分類、10 支相似影片）的特徵（$1$ 跳）；
 \item 鄰居的鄰居（即 $2$ 跳內所有節點）的特徵（$2$ 跳）。
 \end{enumerate}
-
-\subsubsection{對比變體：HGT（異質圖 Transformer）}
-
-\citet{hu2020heterogeneous} 提出的 HGT 以多頭注意力代替均值聚合：
-
-\begin{equation}
-  \mathbf{h}_v^{(\ell+1)} =
-  \sigma\!\Biggl(
-    \sum_{r\in\mathcal{R}}
-    \sum_{u\in\mathcal{N}_r(v)}
-      \alpha_{u\to v}^{(r,\ell)} \cdot
-      \mathbf{W}_r^{V,(\ell)} \mathbf{h}_u^{(\ell)}
-  \Biggr)
-  \label{eq:hgt}
-\end{equation}
-其中注意力係數：
-\begin{equation}
-  \alpha_{u\to v}^{(r,\ell)} \propto
-  \exp\!\left(
-    \frac{
-      \bigl(\mathbf{W}_r^{Q,(\ell)}\mathbf{h}_v^{(\ell)}\bigr)^\top
-      \bigl(\mathbf{W}_r^{K,(\ell)}\mathbf{h}_u^{(\ell)}\bigr)
-    }{\sqrt{d/H}}
-  \right)
-  \label{eq:hgt_attn}
-\end{equation}
-$H$ 為注意力頭數（本實驗設 $H=4$）。
-HGT 能學習「哪個鄰居更值得參考」，但計算成本較高，
-且在無歷史資料推論能力上略遜於 GraphSAGE。
 
 \subsection{多任務損失函數}
 
@@ -863,7 +801,7 @@ Dropout & 0.1（每層 HeteroConv 後） \\
 
 這直接驗證了研究假說：
 圖神經網路的訊息傳遞能有效地將「視覺風格相似的老影片的觀看時長」
-這個上架前唯一可用的鄰域信號，傳遞給新影片的表示向量。
+這個上架前唯一可用的鄰域訊號，傳遞給新影片的表示向量。
 \end{keybox}
 
 Spearman 從 0.047 到 0.256 的提升，代表 HeteroGNN 預測出的影片排名
@@ -877,7 +815,7 @@ Spearman 從 0.047 到 0.256 的提升，代表 HeteroGNN 預測出的影片排�
 以 \texttt{like\_rate} 為例：84.6\% 的影片按讚率為零，
 「哪支影片會爆紅」受到社群網路的隨機傳播效應高度影響，
 即「一個大號的轉發就可以帶動按讚數」。
-這種\textbf{社群隨機性}無法從影片內容或鄰域信號預測，
+這種\textbf{社群隨機性}無法從影片內容或鄰域訊號預測，
 兩個模型的 Spearman $\approx 0$ 是誠實且符合預期的結果。
 \end{sloppypar}
 
@@ -922,10 +860,10 @@ He, X., Deng, K., Wang, X., Li, Y., Zhang, Y., and Wang, M.
 \newblock \emph{LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation}.
 \newblock \textit{SIGIR}, 2020.
 
-\bibitem[Hu et al.(2020)]{hu2020heterogeneous}
-Hu, Z., Dong, Y., Wang, K., and Sun, Y.
-\newblock \emph{Heterogeneous Graph Transformer}.
-\newblock \textit{WWW}, 2020.
+\bibitem[Ke et al.(2017)]{ke2017lightgbm}
+Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., and Liu, T.-Y.
+\newblock \emph{LightGBM: A Highly Efficient Gradient Boosting Decision Tree}.
+\newblock \textit{NeurIPS}, 2017.
 
 \bibitem[Rendle et al.(2009)]{rendle2009bpr}
 Rendle, S., Freudenthaler, C., Gantner, Z., and Schmidt-Thieme, L.

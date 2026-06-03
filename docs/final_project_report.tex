@@ -339,14 +339,13 @@ LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
 
 \subsection{影片人氣預測：MMVED 與 HMMVED}
 
-\citet{zhu2020mmved} 的 MMVED 直接從影片內容特徵（視覺、音訊、文字、社交）
-預測影片人氣（popularity；以 Vine 平台上的留言數、轉發數、
-按讚數、迴圈播放數的穩定化綜合評分衡量），不依賴使用者互動記錄。
-在 NUS micro-video 資料集（186,637 部 Vine 短影音）上，
-MMVED-REG 的 nMSE = \textbf{0.914}，
-優於 ELM（0.982）、TMALL（0.979）與 TRLMVR（0.934）（原論文 Table~2）。
+\citet{zhu2020mmved} 的 MMVED 結合視覺、音訊、文字與社交四個模態，
+以變分編碼器–解碼器框架預測影片人氣，即
+Vine 平台上留言、轉發、按讚與迴圈播放次數的綜合評分。
+在 NUS Vine 資料集上，MMVED-REG 以 nMSE \textbf{0.914} 為當時最優，
+優於 ELM 的 0.982、TMALL 的 0.979 與 TRLMVR 的 0.934。
 \citet{xie2021hmmved} 進一步引入層次多任務框架 HMMVED，
-同時預測多個時序人氣相關指標。這兩項工作\textbf{不依賴使用者互動記錄}，
+同時預測多個時序人氣指標。這兩項工作\textbf{不依賴使用者互動記錄}，
 與本研究的核心設計哲學一致，是未來比較的主要對象。
 
 \subsection{梯度提升決策樹：LightGBM}

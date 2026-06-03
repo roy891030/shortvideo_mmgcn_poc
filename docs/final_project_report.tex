@@ -30,11 +30,18 @@
 \usepackage{tcolorbox}
 \tcbuselibrary{skins, breakable, listings}
 \usepackage{fancyhdr}
+\usepackage{extramarks}
+\usepackage{etoolbox}
 \pagestyle{fancy}\fancyhf{}
 \setlength{\headheight}{13.6pt}\addtolength{\topmargin}{-1.6pt}
 \hfuzz=8pt
 \rhead{\small 期末專案報告：以圖神經網路預測短影音平台表現}
-\lhead{\small \leftmark}\cfoot{\thepage}
+\renewcommand{\sectionmark}[1]{\markboth{#1}{#1}\extramarks{#1}{#1}}
+\newcommand{\pageheadsections}{%
+  \ifdefstrequal{\firstleftmark}{\lastleftmark}
+    {\firstleftmark}
+    {\firstleftmark\;|\;\lastleftmark}}
+\lhead{\small \pageheadsections}\cfoot{\thepage}
 
 %% ── 顏色 ──
 \definecolor{vidblue}{RGB}{41,128,185}
@@ -227,7 +234,7 @@ Recall@10 = 0.0238、NDCG@10 = 0.0178。
 
 \subsection{研究問題的精確定義}
 
-\begin{keybox}[研究問題（Research Question）]
+\begin{keybox}[研究問題]
 在不依賴任何使用者互動歷史的前提下，能否透過建立以\textbf{影片為中心的異質圖}，
 讓圖神經網路的訊息傳遞有效融合「作者背景訊號」、「分類基準訊號」
 和「視覺相似影片的歷史表現」，使上架前表現預測
@@ -296,7 +303,7 @@ $\mathcal{G} = (\mathcal{U}\cup\mathcal{I},\,\mathcal{O}^+)$，
   \label{eq:lightgcn_final}
 \end{equation}
 
-LightGCN 透過圖結構傳遞二跳、三跳以上的高階協同訊號，
+LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
 在稀疏資料上顯著優於 BPR（Recall@10：0.0223 vs 0.0113）。
 但其本質仍是協同過濾——新影片沒有邊，
 訊息傳遞無法作用於它，上架前表現預測問題依舊無解。
@@ -496,7 +503,7 @@ pids.txt 的 153,561 行中，66,983 行（43.6\%）記錄為 $-1$（無對應�
 \node[vidnode] (v2) at (0,2.4)  {影片 $v_2$};
 \node[vidnode] (v3) at (0,-2.4) {影片 $v_3$};
 \node[vidnode,draw=vidblue!60,fill=vidblue!30,very thick]
-               (vnew) at (-4.2,0) {{\bfseries 新影片}\\ $v_?$（無歷史）};
+               (vnew) at (-5.8,0) {{\bfseries 新影片}\\ $v_?$（無歷史）};
 \node[authnode] (a1) at (5.8,2.0)  {作者 $a_1$};
 \node[authnode] (a2) at (5.8,-0.5) {作者 $a_2$};
 \node[catnode]  (c1) at (5.2,-3.0) {分類 $c_1$};
@@ -563,7 +570,7 @@ def build_author_features(meta_df, train_mask):
 
 \subsubsection{邊的設計}
 
-異質圖包含三種語意不同的邊類型（均包含反向邊）：
+異質圖包含三種語意不同的邊類型：
 
 \begin{table}[H]
 \centering
@@ -639,11 +646,11 @@ def build_author_features(meta_df, train_mask):
    \footnotesize video/author：Linear($d_{\mathrm{in}}$, 128)；category：Embedding(51, 128)\\
    $\Rightarrow$ 所有節點統一為 $d=128$ 維};
 \node[layerbox, below=of proj, draw=vidblue!60, fill=vidblue!8] (conv1)
-  {\textbf{HeteroConv Layer 1}（GraphSAGE 聚合，1 跳）\\
+  {\textbf{HeteroConv Layer 1}（GraphSAGE 聚合，1-hop）\\
    \footnotesize 對所有邊類型各自聚合鄰居，加總後 ReLU + Dropout(0.1)};
 \node[layerbox, below=of conv1, draw=vidblue!60, fill=vidblue!8] (conv2)
-  {\textbf{HeteroConv Layer 2}（GraphSAGE 聚合，2 跳）\\
-   \footnotesize 鄰居已融合各自鄰域資訊，感受野擴展到 2 跳；ReLU + Dropout(0.1)};
+  {\textbf{HeteroConv Layer 2}（GraphSAGE 聚合，2-hop）\\
+   \footnotesize 鄰居已融合各自鄰域資訊，感受野擴展到 2-hop；ReLU + Dropout(0.1)};
 \node[layerbox, below=of conv2, draw=catred!60, fill=catred!8] (head)
   {\textbf{輸出頭（僅取 video 節點）}\\
    \footnotesize $\mathbf{h}_v^{(2)}\,[128]$
@@ -688,9 +695,9 @@ def build_author_features(meta_df, train_mask):
 
 兩層傳播後，影片節點 $v$ 的最終表示 $\mathbf{h}_v^{(2)}$ 包含了：
 \begin{enumerate}[leftmargin=*]
-\item 自身的視覺與文字特徵（$0$ 跳）；
-\item 直接鄰居（作者、分類、10 支相似影片）的特徵（$1$ 跳）；
-\item 鄰居的鄰居（即 $2$ 跳內所有節點）的特徵（$2$ 跳）。
+\item 自身的視覺與文字特徵（$0$-hop）；
+\item 直接鄰居（作者、分類、10 支相似影片）的特徵（$1$-hop）；
+\item 鄰居的鄰居（即 $2$-hop 內所有節點）的特徵（$2$-hop）。
 \end{enumerate}
 
 \subsection{多任務損失函數}
@@ -808,15 +815,17 @@ Spearman 從 0.047 到 0.256 的提升，代表 HeteroGNN 預測出的影片排�
 與真實排名的一致性顯著提高——平台使用這個模型給新影片分配初始流量，
 比使用 LightGBM 的準確性高出 4 倍以上。
 
-\subsubsection{核心發現二：Rate 指標的預測天花板}
+\subsubsection{核心發現二：Rate 指標的可預測性限制}
 
 \begin{sloppypar}
 7 個 rate 指標的 Spearman 對兩個模型而言都接近 $0$。
 以 \texttt{like\_rate} 為例：84.6\% 的影片按讚率為零，
-「哪支影片會爆紅」受到社群網路的隨機傳播效應高度影響，
-即「一個大號的轉發就可以帶動按讚數」。
-這種\textbf{社群隨機性}無法從影片內容或鄰域訊號預測，
-兩個模型的 Spearman $\approx 0$ 是誠實且符合預期的結果。
+顯示此類目標存在明顯的零膨脹與長尾分布。
+此外，按讚、留言、收藏等行為容易受到曝光策略、社群擴散、
+發布時段與外部事件影響；這些因素並未完整出現在目前的內容特徵
+與異質圖結構中。因此，兩個模型的 Spearman $\approx 0$
+反映的是現有可觀測特徵對 rate 指標的排序訊號不足，
+而非單一模型架構的失效。
 \end{sloppypar}
 
 \subsubsection{核心發現三：Spearman 與 MAE 的矛盾}

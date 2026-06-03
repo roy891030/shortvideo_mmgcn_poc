@@ -114,7 +114,7 @@
 
 \begin{document}
 \maketitle\thispagestyle{fancy}
-\vspace{-3cm}
+\vspace{-2cm}
 
 %% ════════════════════════════════════════════════════════════════
 \section{摘要}
@@ -339,11 +339,24 @@ LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
 
 \subsection{影片人氣預測：MMVED 與 HMMVED}
 
-\citet{zhu2020mmved} 的 MMVED 直接從影片內容特徵（視覺、音訊、文字）
-預測人氣（popularity），是與本研究任務最接近的對標基準模型。
+\citet{zhu2020mmved} 提出 MMVED，以多模態變分編碼器–解碼器框架，
+透過 Bayesian product-of-experts 機制融合影片的
+視覺（ResNet50 per-keyframe）、音訊（VGGish 128 維）、
+文字與社交四個模態，學習含不確定性的隱表示 $\mathbf{z}$ 並預測人氣指標。
+在 NUS micro-video 資料集（186,637 部 Vine 短影音）上，
+MMVED-REG 以 nMSE = \textbf{0.914} 優於 ELM（0.982）、
+TMALL（0.979）及 TRLMVR（0.934）等基準方法（原論文 Table~2）。
 \citet{xie2021hmmved} 進一步引入層次多任務框架 HMMVED，
-同時預測多個人氣相關指標。這兩項工作\textbf{不依賴使用者互動記錄}，
-與本研究的核心設計哲學一致，是未來比較的主要對象。
+同時預測多個時序人氣相關指標。
+
+這兩項工作的核心設計哲學——\textbf{不依賴使用者互動記錄、
+以多模態內容特徵直接預測人氣}——與本研究高度相近。
+然而，MMVED 的輸入需要預抽取的音訊特徵（VGGish 聲學向量），
+而 ShortVideo 資料集僅提供視覺（ViT 768 維）與文字（SBERT 50 維）特徵，
+未包含聲學特徵；加之兩者評估指標（nMSE vs.\ Spearman / MAE）
+與資料集亦不相同，無法直接橫向比較。
+本研究因此以 LightGBM 作為主要的非圖內容特徵基準，
+MMVED 的系統移植留作未來工作。
 
 \subsection{梯度提升決策樹：LightGBM}
 

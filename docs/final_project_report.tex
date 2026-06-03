@@ -308,18 +308,18 @@ $\mathcal{G} = (\mathcal{U}\cup\mathcal{I},\,\mathcal{O}^+)$，
 \end{equation}
 
 LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
-在稀疏資料上顯著優於 BPR（Recall@10：0.0223 vs 0.0113）。
+在稀疏資料上顯著優於 BPR（Recall@10：0.0223 vs 0.0113，數字來自 \citealt{shang2025shortvideo} 在 ShortVideo 資料集的基準測試）。
 但其本質仍是協同過濾——新影片沒有邊，
 訊息傳遞無法作用於它，上架前表現預測問題依舊無解。
 
 \subsection{多模態圖推薦：MMGCN 與 BM3}
 
-\textbf{MMGCN} \citep{wei2019mmgcn} 為每個模態 $m\in\{v,t,b\}$
-（視覺、文字、行為）各建立一張使用者–影片圖，
-並以 GCN 分別傳播後加權融合：
+\textbf{MMGCN} \citep{wei2019mmgcn} 為每個模態 $m\in\{v,a,t\}$
+（視覺、音訊、文字）各建立一張使用者–影片圖，
+並以 GCN 分別傳播後等權求和融合（原論文 Eq.~9）：
 \begin{equation}
-  \mathbf{e}_u = \sum_{m\in\{v,t,b\}}
-    \alpha_m \cdot \mathrm{GCN}_m\!\left(\mathcal{G}_m,\,\mathbf{F}^m\right)[u]
+  \mathbf{e}_u^* = \sum_{m\in\{v,a,t\}}
+    \mathrm{GCN}_m\!\left(\mathcal{G}_m,\,\mathbf{F}^m\right)[u]
   \label{eq:mmgcn}
 \end{equation}
 多模態特徵的引入讓新影片至少能得到一個基於內容的初始embedding，
@@ -339,7 +339,7 @@ LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
 
 \subsection{影片人氣預測：MMVED 與 HMMVED}
 
-\citet{xie2020mmved} 的 MMVED 直接從影片內容特徵（視覺、音訊、文字）
+\citet{zhu2020mmved} 的 MMVED 直接從影片內容特徵（視覺、音訊、文字）
 預測人氣（popularity），是與本研究任務最接近的對標基準模型。
 \citet{xie2021hmmved} 進一步引入層次多任務框架 HMMVED，
 同時預測多個人氣相關指標。這兩項工作\textbf{不依賴使用者互動記錄}，
@@ -896,11 +896,11 @@ Wei, Y., Wang, X., Nie, L., He, X., Hong, R., and Chua, T.-S.
   Recommendation of Micro-video}.
 \newblock \textit{ACM MM}, 2019.
 
-\bibitem[Xie et al.(2020)]{xie2020mmved}
-Xie, H., et al.
-\newblock \emph{MMVED: Multi-modal Variational Encoder-Decoder for Micro-video
-  Popularity Prediction}.
-\newblock \textit{WWW}, 2020.
+\bibitem[Zhu et al.(2020)]{zhu2020mmved}
+Zhu, Y., Xie, J., and Chen, Z.
+\newblock \emph{Predicting the Popularity of Micro-videos with Multimodal
+  Variational Encoder-Decoder Framework}.
+\newblock arXiv:2003.12724, 2020.
 
 \bibitem[Xie et al.(2021)]{xie2021hmmved}
 Xie, H., et al.

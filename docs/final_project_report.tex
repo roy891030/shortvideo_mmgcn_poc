@@ -141,8 +141,8 @@ Recall@10 = 0.0238、NDCG@10 = 0.0178。
 為此，本專案設計了不引入使用者節點、以影片為中心的\textbf{異質圖神經網路系統}，
 透過兩層 GraphSAGE 異質圖卷積，在 5,410 部影片的測試集上，
 \texttt{mean\_watch\_time} 的 Spearman 排名相關係數達到 \textbf{0.256}，
-優於非圖基準模型 LightGBM 的 0.047，提升 4.4 倍，
-並驗證了端到端無歷史資料推論的可行性。
+優於非圖基準模型 LightGBM 的 0.047（約為其 5.5 倍），
+顯示圖鄰域訊號在不依賴使用者互動歷史的預測情境下具有實質效益。
 \end{sloppypar}
 
 %% ════════════════════════════════════════════════════════════════
@@ -340,8 +340,7 @@ LightGCN 透過圖結構傳遞 2-hop、3-hop 以上的高階協同訊號，
 \subsection{影片人氣預測：MMVED 與 HMMVED}
 
 \citet{zhu2020mmved} 的 MMVED 結合視覺、音訊、文字與社交四個模態，
-以變分編碼器–解碼器框架預測影片人氣，即
-Vine 平台上留言、轉發、按讚與迴圈播放次數的綜合評分，
+預測影片人氣，即 Vine 平台上留言、轉發、按讚與迴圈播放次數的綜合評分，
 在 NUS Vine 資料集上 nMSE 達 \textbf{0.914}。
 \citet{xie2021hmmved} 進一步引入層次多任務框架 HMMVED，
 同時預測多個時序人氣指標。這兩項工作\textbf{不依賴使用者互動記錄}，
@@ -377,7 +376,7 @@ $T$ 棵決策樹的加總輸出單一指標的預測值：
 
 \citet{hamilton2017inductive} 提出 GraphSAGE，其核心創新是\textbf{歸納學習}：
 訓練完成後，對訓練期從未出現的新節點也能產生有意義的 embedding，
-這正是無歷史資料推論的理論基礎。
+具備在純內容特徵環境下對新節點泛化的理論基礎。
 
 GraphSAGE 的單層更新採用鄰域均值聚合再與自身特徵拼接：
 \begin{equation}
@@ -432,10 +431,10 @@ LightGBM（直接基準）& \checkmark & \checkmark & \checkmark & \texttimes \\
 \end{tabular}
 \end{table}
 
-表中清楚呈現本研究與 LightGBM 的根本差異：兩者同樣支援上架前表現預測、
-全平台指標、以及不需使用者歷史，但 LightGBM 無法利用\textbf{圖鄰域訊號}。
-本研究正是透過建立以影片為中心的異質圖，讓 HeteroGNN 能從作者節點和分類節點
-借用鄰域的歷史表現作為無歷史資料推論的輔助訊號，
+表中呈現本研究與 LightGBM 的根本差異：兩者同樣不依賴使用者互動歷史、
+支援全平台指標，但 LightGBM 無法利用\textbf{圖鄰域訊號}。
+本研究透過建立以影片為中心的異質圖，讓 HeteroGNN 能從作者節點和分類節點
+借用鄰域的歷史表現作為輔助訊號，
 從而在 \texttt{mean\_watch\_time} 的排名預測上顯著超越 LightGBM。
 
 %% ════════════════════════════════════════════════════════════════
@@ -598,11 +597,10 @@ def build_author_features(meta_df, train_mask):
 \end{tabular}
 \end{table}
 
-\textbf{similar\_to 邊對無歷史資料推論的意義}：
-建立 \texttt{similar\_to} 邊時只需影片的視覺特徵（768 維），
-不需要任何互動記錄。因此，即使是全新的、無歷史資料的影片，
-也能找到 $k=10$ 支視覺上最相似的老影片，
-透過 GNN 訊息傳遞從這些老影片的歷史表現中借用訊號。
+\textbf{similar\_to 邊的設計意義}：
+建立 \texttt{similar\_to} 邊只需影片的視覺特徵（768 維），
+不需任何互動記錄。因此，缺乏互動記錄的影片也能透過視覺相似性
+找到 $k=10$ 支相近影片，透過 GNN 訊息傳遞借用鄰近影片的歷史表現訊號。
 
 演算法~\ref{alg:graph} 描述完整的建圖流程：
 
@@ -739,7 +737,7 @@ def build_author_features(meta_df, train_mask):
   \end{cases}
   \label{eq:huber}
 \end{equation}
-  誤差小時用平方懲罰（精確），誤差大時改線性（穩健），
+  誤差小時為求精確，用平方懲罰，誤差大時為求穩健改線性，
   避免 MSE 對觀看時長離群值（最大 545 秒）的過度懲罰；
 \item 對數轉換 $\log(1+t)$：觀看時長分佈高度右偏（中位數 22 秒，最大 545 秒），
   對數壓縮使模型對各時長範圍均等學習，
@@ -757,10 +755,10 @@ def build_author_features(meta_df, train_mask):
 \textbf{項目} & \textbf{設定} \\
 \midrule
 資料切分 & 80 / 10 / 10（訓練 43,270 / 驗證 5,408 / 測試 5,410），seed=42 \\
-深度學習框架 & PyTorch 2.6，PyTorch Geometric \\
-優化器 & Adam，學習率 $10^{-3}$ \\
-訓練 epoch & 至多 500，patience=50（早停） \\
-隱藏維度 $d$ & 128（可透過 \texttt{--d} 調整） \\
+深度學習框架 & PyTorch Geometric \\
+優化器 & Adam，learning rate: $10^{-3}$ \\
+訓練 epoch & 至多 500，patience=50（early stopping） \\
+隱藏維度 $d$ & 128 \\
 Dropout & 0.1（每層 HeteroConv 後） \\
 總參數量 & 450,632 \\
 \bottomrule
@@ -812,14 +810,13 @@ Dropout & 0.1（每層 HeteroConv 後） \\
 \texttt{mean\_watch\_time} 的 Spearman 相關係數從 $0.047$（LightGBM）
 提升至 $\mathbf{0.256}$（HeteroGNN），提升幅度達 $4.4$ 倍。
 
-這直接驗證了研究假說：
-圖神經網路的訊息傳遞能有效地將「視覺風格相似的老影片的觀看時長」
-這個上架前唯一可用的鄰域訊號，傳遞給新影片的表示向量。
+這支持了研究假說：
+圖神經網路的訊息傳遞能有效地將「視覺風格相似影片的觀看時長」
+此一鄰域訊號，融合進影片的表示向量中。
 \end{keybox}
 
 Spearman 從 0.047 到 0.256 的提升，代表 HeteroGNN 預測出的影片排名
-與真實排名的一致性顯著提高——平台使用這個模型給新影片分配初始流量，
-比使用 LightGBM 的準確性高出 4 倍以上。
+與真實排名的一致性顯著提高，就排名能力而言約為 LightGBM 的 5.5 倍。
 
 \subsubsection{核心發現二：Rate 指標的可預測性限制}
 
@@ -847,19 +844,9 @@ HeteroGNN 的 \texttt{mean\_watch\_time} MAE 遠高於 LightGBM（386 秒 vs 24 
       但預測的絕對值偏差大（MAE 高）——
       GNN 的embedding表示尚未精確校準到真實秒數，但排序方向正確。
 \end{itemize}
+Spearman 與 MAE 的矛盾，反映了模型在「排序能力」與「數值精確度」上的不同取捨。
+\newpage
 
-在平台應用中，流量分配關注的是「哪支影片排第一」，
-即\textbf{排名能力}（Spearman）更重要。
-因此 HeteroGNN 是更合適的解決方案。
-MAE 過高的問題可以透過事後輸出校準（isotonic regression 或 Platt scaling）改善，
-不需要重新訓練整個模型。
-
-\subsubsection{核心發現四：無歷史資料推論的可行性驗證}
-
-在 from-raw 模式下，使用原始 .mp4 輸入，
-系統完整執行：視覺特徵抽取 → cosine kNN 建圖 → HeteroGNN 推論，
-驗證了\textbf{端到端無歷史資料推論}的可行性。
-全新影片無需任何互動記錄，即可在毫秒級時間內得到 8 個預測指標。
 
 %% ════════════════════════════════════════════════════════════════
 \bibliographystyle{abbrvnat}

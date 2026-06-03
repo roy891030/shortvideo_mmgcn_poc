@@ -37,10 +37,14 @@
 \hfuzz=8pt
 \rhead{\small 期末專案報告：以圖神經網路預測短影音平台表現}
 \renewcommand{\sectionmark}[1]{\markboth{#1}{#1}\extramarks{#1}{#1}}
+\makeatletter
 \newcommand{\pageheadsections}{%
-  \ifdefstrequal{\firstleftmark}{\lastleftmark}
+  \ifnum\pdf@strcmp{\firstleftmark}{\lastleftmark}=0
     {\firstleftmark}
-    {\firstleftmark\;|\;\lastleftmark}}
+  \else
+    {\firstleftmark\;|\;\lastleftmark}
+  \fi}
+\makeatother
 \lhead{\small \pageheadsections}\cfoot{\thepage}
 
 %% ── 顏色 ──

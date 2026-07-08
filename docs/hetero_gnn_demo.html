@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HeteroGNN 完整流程 Demo</title>
+<style>
+@font-face{
+  font-family:'JFOpenHuninn';
+  src:url('jf-openhuninn-2.1.ttf') format('truetype');
+  font-weight:normal;
+  font-style:normal;
+}
+:root{
+  --pk0:#fce4ec; --pk1:#f8c4d4; --pk2:#e8829a; --pk3:#c45f7a;
+  --nv0:#1e3a5f; --nv1:#0d1b30; --nv2:#2d5080; --nv3:#e8f0fb;
+  --bg:#fdf5f7; --surface:#fff; --border:#f0d0db;
+  --text:#1a2740; --muted:#7890a8;
+  --r:14px; --r-sm:8px;
+  --shadow:0 2px 14px rgba(30,58,95,.09);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'JFOpenHuninn','PingFang TC','Noto Sans TC',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--bg);color:var(--text);font-size:14px;line-height:1.7;
+}
+/* ── NAV ── */
+.nav{
+  background:var(--nv1);display:flex;align-items:stretch;
+  padding:0 20px;gap:2px;position:sticky;top:0;z-index:100;
+  border-bottom:3px solid var(--pk2);
+}
+.brand{color:#fff;font-weight:700;font-size:12px;padding:0 14px 0 0;
+  display:flex;align-items:center;border-right:1px solid rgba(255,255,255,.15);
+  margin-right:8px;white-space:nowrap;line-height:1.3;}
+.author-tag{color:rgba(255,255,255,.65);font-size:12px;font-weight:600;
+  margin-left:auto;padding:0 0 0 16px;display:flex;align-items:center;white-space:nowrap;}
+.btn:disabled{opacity:.35;cursor:default}
+.tab-btn{
+  color:rgba(255,255,255,.55);border:none;background:none;
+  padding:13px 13px;font-size:13px;font-weight:600;cursor:pointer;
+  border-bottom:3px solid transparent;margin-bottom:-3px;
+  transition:all .2s;white-space:nowrap;font-family:inherit;
+}
+.tab-btn:hover{color:var(--pk1)}
+.tab-btn.active{color:var(--pk2);border-bottom-color:var(--pk2)}
+/* ── LAYOUT ── */
+.tab{display:none;padding:24px 28px;max-width:1080px;margin:0 auto}
+.tab.active{display:block}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+/* ── CARD ── */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:18px;box-shadow:var(--shadow);
+}
+.card-h{font-weight:700;font-size:14px;color:var(--nv0);margin-bottom:12px;
+  padding-bottom:8px;border-bottom:2px solid var(--pk0)}
+/* ── PAGE TITLE ── */
+.page-h{font-size:20px;font-weight:700;color:var(--nv1);margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+/* ── SECTION LABEL ── */
+.sec-label{
+  display:inline-block;background:var(--nv0);color:#fff;
+  font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;
+  margin-bottom:10px;letter-spacing:.5px;
+}
+/* ── TABLES ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--nv0);color:#fff;padding:8px 10px;text-align:left;font-weight:600}
+th:first-child{border-radius:var(--r-sm) 0 0 0}
+th:last-child{border-radius:0 var(--r-sm) 0 0}
+td{padding:7px 10px;border-bottom:1px solid var(--pk0)}
+tr:last-child td{border-bottom:none}
+tr:nth-child(even) td{background:var(--bg)}
+.mono{font-family:'SF Mono',Menlo,Courier,monospace;font-size:12px}
+.num{font-family:'SF Mono',Menlo,Courier,monospace;font-weight:700}
+/* ── ROW HIGHLIGHTS ── */
+.rh-vid td{background:var(--nv3)!important}
+.rh-sim td{background:#e8f4fd!important}
+.rh-aut td{background:var(--pk0)!important}
+.rh-cat td{background:#ede9fe!important}
+.rh-sum td{background:#d1fae5!important;font-weight:700}
+.rh-result td{background:var(--pk1)!important}
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.b-vid{background:var(--nv3);color:var(--nv0)}
+.b-aut{background:var(--pk0);color:var(--pk3)}
+.b-cat{background:#ede9fe;color:#5b21b6}
+.b-train{background:var(--nv0);color:#fff}
+.b-val{background:var(--pk2);color:#fff}
+.b-test{background:#e2e8f0;color:#475569}
+.b-sim{background:#cffafe;color:#164e63}
+/* ── FORMULA BOX ── */
+.fbox{
+  background:var(--nv3);border-left:4px solid var(--nv0);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+  padding:10px 14px;font-family:'SF Mono',Menlo,Courier,monospace;
+  font-size:12.5px;color:var(--nv0);margin:10px 0;line-height:1.8;
+}
+.fbox-pink{background:var(--pk0);border-left-color:var(--pk2);color:var(--pk3)}
+.fbox-grn{background:#d1fae5;border-left-color:#059669;color:#065f46}
+/* ── INFO BOXES ── */
+.info{border-radius:var(--r-sm);padding:11px 14px;margin:10px 0;font-size:13px}
+.info-navy,.info-pink,.info-grn,.info-warn{
+  border-radius:var(--r-sm);padding:12px 16px;margin:10px 0;font-size:13px;line-height:1.7;
+}
+.info-navy{background:var(--nv3);border:1px solid #bfdbfe;color:var(--nv0)}
+.info-pink{background:var(--pk0);border:1px solid var(--pk1);color:var(--pk3)}
+.info-grn{background:#d1fae5;border:1px solid #6ee7b7;color:#065f46}
+.info-warn{background:#fef3c7;border:1px solid #fcd34d;color:#78350f}
+/* ── STEP CONTROLS ── */
+.step-ctrl{display:flex;align-items:center;gap:10px;margin:14px 0}
+.btn{
+  padding:8px 18px;border-radius:20px;border:none;
+  font-weight:700;cursor:pointer;font-size:13px;
+  font-family:inherit;transition:all .2s;
+}
+.btn-navy{background:var(--nv0);color:#fff}
+.btn-navy:hover{background:var(--nv2)}
+.btn-outline{background:var(--surface);color:var(--nv0);border:2px solid var(--nv0)}
+.btn-outline:hover{background:var(--nv3)}
+.step-info{font-size:12px;color:var(--muted);font-weight:600}
+/* ── STAT CARDS ── */
+.stat-num{font-size:30px;font-weight:800;line-height:1.1}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+/* ── SPLIT BAR ── */
+.split-bar{display:flex;height:44px;border-radius:var(--r-sm);overflow:hidden;margin:10px 0}
+.split-seg{display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff;transition:all .3s}
+/* ── FLOW ARROW ── */
+.flow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px}
+.flow-node{background:var(--surface);border:2px solid var(--border);
+  border-radius:var(--r-sm);padding:8px 12px;font-weight:600;text-align:center;min-width:90px}
+.flow-arrow{color:var(--pk2);font-weight:700;font-size:18px}
+/* ── COMPUTE BOX (step detail) ── */
+.cbox{
+  background:var(--surface);border:2px solid var(--border);
+  border-radius:var(--r);padding:14px;margin-top:12px;
+  display:none;
+}
+.cbox.show{display:block}
+.cbox-h{font-weight:700;font-size:13px;color:var(--nv0);
+  background:var(--nv3);padding:6px 10px;border-radius:var(--r-sm);margin-bottom:10px}
+.cline{
+  display:grid;grid-template-columns:110px 1fr 60px;
+  align-items:center;gap:6px;padding:5px 6px;border-radius:6px;
+  font-size:12.5px;margin-bottom:4px;font-family:'SF Mono',Menlo,Courier,monospace;
+}
+.cline-sim{background:#e8f4fd}
+.cline-aut{background:var(--pk0)}
+.cline-cat{background:#ede9fe}
+.cline-sum{background:#d1fae5;font-weight:700}
+.cedge{font-weight:700}
+.ceq{color:var(--muted);text-align:center}
+.cresult{font-weight:800;color:#059669}
+/* ── GRAPH SECTION ── */
+.graph-wrap{
+  background:#f9fafb;border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;
+}
+/* ── HIGHLIGHTED NODE (SVG) ── */
+.hl-node{filter:drop-shadow(0 0 8px var(--pk2))}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="brand">以圖神經網路預測短影音平台表現 demo</div>
+  <button class="tab-btn active" onclick="go('def')">0. 變數定義</button>
+  <button class="tab-btn" onclick="go('data')">1. 資料集</button>
+  <button class="tab-btn" onclick="go('graph')">2. 建圖與 kNN</button>
+  <button class="tab-btn" onclick="go('split')">3. Data Split</button>
+  <button class="tab-btn" onclick="go('l1')">4. Layer 1</button>
+  <button class="tab-btn" onclick="go('l2')">5. Layer 2</button>
+  <button class="tab-btn" onclick="go('loss')">6. Loss 與測試</button>
+  <div class="author-tag">羅頤．財金所</div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     TAB 0 — 變數定義
+════════════════════════════════════════════ -->
+<div id="tab-def" class="tab active">
+  <div class="page-h">變數定義</div>
+  <div class="page-sub">以下所有符號在後續各頁中均依此定義使用</div>
+
+  <div class="g2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-h">節點 Embedding（向量）</div>
+      <table>
+        <tr><th>符號</th><th>說明</th><th>Demo 初始值</th><th>真實維度</th></tr>
+        <tr><td class="mono">h_vi</td><td>video 節點 i 的 embedding 向量</td><td class="mono">[3, 1, 2, 1]</td><td>819 → 128</td></tr>
+        <tr><td class="mono">h_ai</td><td>author 節點 i 的 embedding 向量</td><td class="mono">[2, 1]</td><td>10 → 128</td></tr>
+        <tr><td class="mono">h_ci</td><td>category 節點 i 的 embedding 向量</td><td class="mono">[2]</td><td>Embedding(51,128)</td></tr>
+        <tr><td class="mono">h_vi_Lj</td><td>video i 在第 j 層 SAGEConv 之後的 embedding</td><td>—</td><td>128 維</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-h">可訓練權重（Learnable Parameters）</div>
+      <table>
+        <tr><th>符號</th><th>說明</th><th>Demo 值</th><th>真實大小</th></tr>
+        <tr><td class="mono">W_n</td><td>SAGEConv 鄰居訊息的線性矩陣（lin_l）</td><td class="mono">0.3</td><td>128 × 128</td></tr>
+        <tr><td class="mono">W_s</td><td>SAGEConv 自身訊息的線性矩陣（lin_r）</td><td class="mono">0.5</td><td>128 × 128</td></tr>
+        <tr><td class="mono">W_mlp</td><td>Readout MLP 輸出層的權重</td><td class="mono">0.05</td><td>64 × 8</td></tr>
+        <tr><td class="mono">b</td><td>以上各層的偏差項（bias），demo 中設為 0</td><td class="mono">0</td><td>對應維度</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-h">函數與運算</div>
+      <table>
+        <tr><th>符號</th><th>定義</th><th>用途</th></tr>
+        <tr><td class="mono">MEAN(S)</td><td>集合 S 中所有向量取平均</td><td>SAGEConv 鄰居聚合</td></tr>
+        <tr><td class="mono">ReLU(x)</td><td>max(0, x)，負值變 0</td><td>每層 SAGEConv 後的激活</td></tr>
+        <tr><td class="mono">sigmoid(x)</td><td>1 / (1 + e^(-x))，輸出壓縮到 (0, 1)</td><td>rate 類預測的最終激活</td></tr>
+        <tr><td class="mono">expm1(x)</td><td>e^x - 1，log 空間還原</td><td>watch_time 推論時使用</td></tr>
+        <tr><td class="mono">aggr=sum</td><td>多種邊型態的輸出相加</td><td>HeteroConv 聚合策略</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-h">訓練相關</div>
+      <table>
+        <tr><th>符號</th><th>說明</th></tr>
+        <tr><td class="mono">train_mask</td><td>布林陣列，標記哪些 video 節點參與 loss 計算</td></tr>
+        <tr><td class="mono">val_mask</td><td>布林陣列，標記 validation 節點（用於選 checkpoint）</td></tr>
+        <tr><td class="mono">test_mask</td><td>布林陣列，標記最終評估節點（不參與 loss）</td></tr>
+        <tr><td class="mono">w_i</td><td>影片 i 的曝光量（n_impressions），作為 loss 的樣本權重</td></tr>
+        <tr><td class="mono">lr</td><td>Learning rate，學習率，控制每次 W 的更新步長</td></tr>
+        <tr><td class="mono">loss</td><td>訓練損失 = Σ w_i × MSE(rate) + Σ w_i × Huber(log_wt)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">核心公式一覽</div>
+    <div class="g2">
+      <div>
+        <div class="sec-label">SAGEConv（每層、每種邊）</div>
+        <div class="fbox">
+          out_X_vi  =  W_n × MEAN( h_u  for u in N_X(vi) )<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+  W_s × h_vi<br><br>
+          h_vi_new  =  ReLU( sum of out_X_vi for all edge types X )
+        </div>
+        <div class="info-navy" style="font-size:12px">
+          N_X(vi) 代表透過邊 X 連到 vi 的所有鄰居節點集合。<br>
+          每種邊（similar / author / category）各有獨立的 W_n 和 W_s。<br>
+          demo 中共用同一組數值以便計算。
+        </div>
+      </div>
+      <div>
+        <div class="sec-label">Loss（加權多任務）</div>
+        <div class="fbox fbox-pink">
+          w = n_impressions / sum(n_impressions)<br><br>
+          rate_loss  =  sum( w_i × (pred_i - true_i)^2 )<br><br>
+          wt_loss    =  sum( w_i × Huber(pred_log_i, true_log_i, delta=1) )<br><br>
+          total_loss =  rate_loss + wt_loss
+        </div>
+        <div class="info-navy" style="font-size:12px">
+          Huber loss：diff &lt; delta 時用平方，否則改用線性，防止 watch_time 極端值爆炸。
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-label" style="margin-top:16px">demo 設定總覽</div>
+    <div class="fbox">
+      節點：v0(h=3,train), v1(h=1,train), v2(h=2,val), v3(h=1,test)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a0(h=2, 發布v0,v1),  a1(h=1, 發布v2,v3),  c0(h=2, 所有影片的分類)<br>
+      邊：v0↔v1 (similar_to),  v2↔v3 (similar_to)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;a0→v0, a0→v1 (posted_by) ;  a1→v2, a1→v3 (posted_by)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;c0→所有 video (belongs_to)<br>
+      W_n=0.3, W_s=0.5, W_mlp=0.05, d=1（真實 d=128）, k=1（真實 k=10）
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 1 — 資料集
+════════════════════════════════════════════ -->
+<div id="tab-data" class="tab">
+  <div class="page-h">真實資料集</div>
+  <div class="page-sub">來源：ShortVideo_tiny，共 54,088 支短影片</div>
+
+  <div class="g3" style="margin-bottom:16px">
+    <div class="card" style="text-align:center">
+      <div class="stat-num" style="color:var(--nv0)">54,088</div>
+      <div class="stat-sub">Video 節點（含 train / val / test）</div>
+    </div>
+    <div class="card" style="text-align:center">
+      <div class="stat-num" style="color:var(--pk2)">34,939</div>
+      <div class="stat-sub">Author 節點</div>
+    </div>
+    <div class="card" style="text-align:center">
+      <div class="stat-num" style="color:#7c3aed">51</div>
+      <div class="stat-sub">Category 節點（用 Embedding 初始化）</div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h">節點特徵維度（原始 → 投影後）</div>
+      <table>
+        <tr><th>節點</th><th>原始特徵</th><th>組成</th><th>投影後（d）</th></tr>
+        <tr><td><span class="badge b-vid">video</span></td><td class="num">819</td>
+          <td class="mono" style="font-size:11px">768(image) + 50(text) + 1(log_dur)</td><td class="num">128</td></tr>
+        <tr><td><span class="badge b-aut">author</span></td><td class="num">10</td>
+          <td class="mono" style="font-size:11px">1(log_fans) + 1(count) + 8(label_mean)</td><td class="num">128</td></tr>
+        <tr><td><span class="badge b-cat">category</span></td><td>無（直接學習）</td>
+          <td class="mono" style="font-size:11px">nn.Embedding(51, 128)</td><td class="num">128</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-h">預測目標（8 個）</div>
+      <table>
+        <tr><th>目標欄位</th><th>激活函數</th><th>Loss</th></tr>
+        <tr><td>like_rate</td><td>sigmoid</td><td rowspan="7" style="vertical-align:middle">加權 MSE</td></tr>
+        <tr><td>comment_rate</td><td>sigmoid</td></tr>
+        <tr><td>follow_rate</td><td>sigmoid</td></tr>
+        <tr><td>collect_rate</td><td>sigmoid</td></tr>
+        <tr><td>forward_rate</td><td>sigmoid</td></tr>
+        <tr><td>hate_rate</td><td>sigmoid</td></tr>
+        <tr><td>effective_view_rate</td><td>sigmoid</td></tr>
+        <tr><td>mean_watch_time</td><td>linear（log 空間）</td><td>加權 Huber</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-h">mean_watch_time 的特殊處理</div>
+    <div class="info-navy">
+      <strong>為什麼用 log 空間？</strong><br>
+      watch_time 分布高度右偏：少數熱門影片的觀看時長可能是平均值的 100 倍以上。
+      直接在原始空間訓練，MSE 會被這些極端值主導，模型只會一直猜高值。<br>
+      做法：訓練前先轉換 <code>target = log1p(watch_time)</code>，讓目標值接近常態；
+      推論時再 <code>pred_sec = expm1(pred_log)</code> 還原。
+    </div>
+    <div class="info-pink" style="margin-top:4px">
+      <strong>為什麼用 Huber Loss（δ = 1.0）？</strong><br>
+      即使在 log 空間，仍有部分極端影片。MSE 對大誤差是二次懲罰，一個異常值就能主導整批梯度。
+      Huber 切換策略如下：
+    </div>
+    <div class="fbox" style="margin-top:6px;font-size:12px">
+      L(x)  =  x² / 2                  ← 若 |x| ≤ δ（誤差小，用平方：梯度光滑）<br>
+      L(x)  =  δ × ( |x| − δ/2 )       ← 若 |x| > δ（誤差大，切換線性：不讓極端值爆炸）<br><br>
+      其中 x = pred_log − true_log，δ = 1.0<br><br>
+      範例：誤差 x = 3.0（log 空間）<br>
+      MSE 損失：  3.0² = 9.00，梯度 = 6.0<br>
+      Huber 損失：1.0 × (3.0 − 0.5) = 2.50，梯度 = 1.0（縮小 6 倍）
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-h">邊的種類（建圖後共 5 種）</div>
+    <table>
+      <tr><th>邊種類</th><th>起點 → 終點</th><th>數量</th><th>建立方式</th></tr>
+      <tr><td><span class="badge b-aut">posted_by</span></td><td>video → author</td><td class="num">54,088</td><td>每支影片對應其 author_id</td></tr>
+      <tr><td><span class="badge b-aut">rev_posted_by</span></td><td>author → video</td><td class="num">54,088</td><td>ToUndirected() 自動加的反向邊</td></tr>
+      <tr><td><span class="badge b-cat">belongs_to</span></td><td>video → category</td><td class="num">54,088</td><td>每支影片對應其 category_id</td></tr>
+      <tr><td><span class="badge b-cat">rev_belongs_to</span></td><td>category → video</td><td class="num">54,088</td><td>ToUndirected() 自動加的反向邊</td></tr>
+      <tr><td><span class="badge b-sim">similar_to</span></td><td>video → video</td><td class="num">942,894</td><td>cosine kNN（k=10），只用 image embedding</td></tr>
+    </table>
+    <div class="info-warn" style="margin-top:10px;font-size:12px">
+      similar_to 建邊時只用 image embedding，不使用任何 label，以防止 data leakage。
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 2 — 建圖與 kNN
+════════════════════════════════════════════ -->
+<div id="tab-graph" class="tab">
+  <div class="page-h">建圖與 kNN</div>
+  <div class="page-sub">以 demo 範例（4 支影片）說明圖的建立過程</div>
+
+  <div class="g2" style="margin-bottom:16px">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h">Step 1：計算 cosine 相似度（只用 image embedding）</div>
+        <table>
+          <tr><th>節點</th><th>image embedding</th><th>與其他節點的距離 |diff|</th><th>最近鄰（k=1）</th></tr>
+          <tr><td><strong>v0</strong></td><td class="num">0.9</td>
+            <td class="mono" style="font-size:11px">|v0-v1|=0.10, |v0-v2|=0.50, |v0-v3|=0.55</td>
+            <td><strong>v1</strong> (0.10)</td></tr>
+          <tr><td><strong>v1</strong></td><td class="num">0.8</td>
+            <td class="mono" style="font-size:11px">|v1-v0|=0.10, |v1-v2|=0.40, |v1-v3|=0.45</td>
+            <td><strong>v0</strong> (0.10)</td></tr>
+          <tr><td><strong>v2</strong></td><td class="num">0.4</td>
+            <td class="mono" style="font-size:11px">|v2-v0|=0.50, |v2-v1|=0.40, |v2-v3|=0.05</td>
+            <td><strong>v3</strong> (0.05)</td></tr>
+          <tr><td><strong>v3</strong></td><td class="num">0.35</td>
+            <td class="mono" style="font-size:11px">|v3-v0|=0.55, |v3-v1|=0.45, |v3-v2|=0.05</td>
+            <td><strong>v2</strong> (0.05)</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-h">Step 2：建邊並存檔（之後不再重跑 kNN）</div>
+        <table>
+          <tr><th>邊種類</th><th>建立的邊</th></tr>
+          <tr class="rh-sim"><td><span class="badge b-sim">similar_to</span></td><td class="mono">v0 ↔ v1, v2 ↔ v3</td></tr>
+          <tr class="rh-aut"><td><span class="badge b-aut">posted_by</span></td><td class="mono">v0→a0, v1→a0, v2→a1, v3→a1</td></tr>
+          <tr class="rh-cat"><td><span class="badge b-cat">belongs_to</span></td><td class="mono">v0→c0, v1→c0, v2→c0, v3→c0</td></tr>
+        </table>
+        <div class="info-grn" style="margin-top:10px;font-size:12px">
+          ToUndirected() 為每條邊加上反向邊，確保訊息可雙向流動。<br>
+          test 節點 v3 的邊（v3↔v2, v3→a1, v3→c0）在此時就已建立在圖中。
+        </div>
+      </div>
+    </div>
+    <div class="card graph-wrap" style="padding:16px">
+      <div class="card-h">demo 圖結構（建圖完成後）</div>
+      <svg viewBox="0 0 580 440" width="100%">
+        <!-- EDGE LINES -->
+        <!-- posted_by: a0-v0, a0-v1 -->
+        <line x1="155" y1="108" x2="92" y2="204" stroke="#e8829a" stroke-width="2" stroke-dasharray="5,3"/>
+        <line x1="155" y1="108" x2="233" y2="204" stroke="#e8829a" stroke-width="2" stroke-dasharray="5,3"/>
+        <!-- posted_by: a1-v2, a1-v3 -->
+        <line x1="425" y1="108" x2="352" y2="204" stroke="#e8829a" stroke-width="2" stroke-dasharray="5,3"/>
+        <line x1="425" y1="108" x2="503" y2="204" stroke="#e8829a" stroke-width="2" stroke-dasharray="5,3"/>
+        <!-- similar_to -->
+        <line x1="92" y1="218" x2="233" y2="218" stroke="#1e3a5f" stroke-width="3"/>
+        <line x1="352" y1="218" x2="503" y2="218" stroke="#1e3a5f" stroke-width="3"/>
+        <!-- belongs_to: c0 to all -->
+        <line x1="290" y1="356" x2="92" y2="228" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,3" opacity=".55"/>
+        <line x1="290" y1="356" x2="233" y2="228" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,3" opacity=".55"/>
+        <line x1="290" y1="356" x2="352" y2="228" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,3" opacity=".55"/>
+        <line x1="290" y1="356" x2="503" y2="228" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,3" opacity=".55"/>
+
+        <!-- EDGE LABELS -->
+        <text x="152" y="165" font-size="10" fill="#c45f7a" text-anchor="middle">posted_by</text>
+        <text x="162" y="158" font-size="9" fill="#c45f7a" text-anchor="middle">W_n=0.3, W_s=0.5</text>
+        <text x="163" y="218" font-size="10" fill="#1e3a5f" text-anchor="middle">similar_to</text>
+        <text x="163" y="230" font-size="9" fill="#1e3a5f" text-anchor="middle">W_n=0.3, W_s=0.5</text>
+        <text x="430" y="165" font-size="10" fill="#c45f7a" text-anchor="middle">posted_by</text>
+        <text x="430" y="218" font-size="10" fill="#1e3a5f" text-anchor="middle">similar_to</text>
+        <text x="430" y="230" font-size="9" fill="#1e3a5f" text-anchor="middle">W_n=0.3, W_s=0.5</text>
+        <text x="200" y="310" font-size="10" fill="#7c3aed" text-anchor="middle" transform="rotate(-40,200,310)">belongs_to</text>
+
+        <!-- AUTHOR NODES -->
+        <circle cx="155" cy="92" r="28" fill="var(--pk0)" stroke="var(--pk2)" stroke-width="2.5"/>
+        <text x="155" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="var(--pk3)">a0</text>
+        <text x="155" y="104" text-anchor="middle" font-size="12" fill="var(--pk3)">h = 2</text>
+
+        <circle cx="425" cy="92" r="28" fill="var(--pk0)" stroke="var(--pk2)" stroke-width="2.5"/>
+        <text x="425" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="var(--pk3)">a1</text>
+        <text x="425" y="104" text-anchor="middle" font-size="12" fill="var(--pk3)">h = 1</text>
+
+        <!-- VIDEO NODES -->
+        <circle cx="92" cy="218" r="28" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5"/>
+        <text x="92" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="var(--nv0)">v0</text>
+        <text x="92" y="230" text-anchor="middle" font-size="12" fill="var(--nv0)">h = 3</text>
+        <text x="92" y="254" text-anchor="middle" font-size="10" fill="var(--nv0)" font-weight="700">train</text>
+
+        <circle cx="233" cy="218" r="28" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5"/>
+        <text x="233" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="var(--nv0)">v1</text>
+        <text x="233" y="230" text-anchor="middle" font-size="12" fill="var(--nv0)">h = 1</text>
+        <text x="233" y="254" text-anchor="middle" font-size="10" fill="var(--nv0)" font-weight="700">train</text>
+
+        <circle cx="352" cy="218" r="28" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5"/>
+        <text x="352" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="var(--nv0)">v2</text>
+        <text x="352" y="230" text-anchor="middle" font-size="12" fill="var(--nv0)">h = 2</text>
+        <text x="352" y="254" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="700">val</text>
+
+        <circle cx="503" cy="218" r="28" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5"/>
+        <text x="503" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="var(--nv0)">v3</text>
+        <text x="503" y="230" text-anchor="middle" font-size="12" fill="var(--nv0)">h = 1</text>
+        <text x="503" y="254" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="700">test</text>
+
+        <!-- CATEGORY NODE -->
+        <circle cx="290" cy="368" r="28" fill="#ede9fe" stroke="#7c3aed" stroke-width="2.5"/>
+        <text x="290" y="364" text-anchor="middle" font-size="13" font-weight="700" fill="#5b21b6">c0</text>
+        <text x="290" y="380" text-anchor="middle" font-size="12" fill="#5b21b6">h = 2</text>
+
+        <!-- LEGEND -->
+        <rect x="10" y="405" width="10" height="2" fill="var(--pk2)"/>
+        <line x1="10" y1="411" x2="24" y2="411" stroke="var(--pk2)" stroke-width="2" stroke-dasharray="4,2"/>
+        <text x="28" y="415" font-size="10" fill="var(--pk3)">posted_by (author)</text>
+        <line x1="155" y1="411" x2="173" y2="411" stroke="var(--nv0)" stroke-width="3"/>
+        <text x="177" y="415" font-size="10" fill="var(--nv0)">similar_to (kNN)</text>
+        <line x1="295" y1="411" x2="313" y2="411" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,2"/>
+        <text x="317" y="415" font-size="10" fill="#5b21b6">belongs_to (category)</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 3 — DATA SPLIT
+════════════════════════════════════════════ -->
+<div id="tab-split" class="tab">
+  <div class="page-h">Data Split</div>
+  <div class="page-sub">seed=42，隨機打亂後切分；切分在建圖之前確定</div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-h">真實資料集切分（80 / 10 / 10）</div>
+    <div class="split-bar">
+      <div class="split-seg" style="width:80%;background:var(--nv0)">Train 80% — 43,270 支</div>
+      <div class="split-seg" style="width:10%;background:var(--pk2)">Val 10%</div>
+      <div class="split-seg" style="width:10%;background:#94a3b8">Test 10%</div>
+    </div>
+    <div style="display:flex;gap:20px;font-size:12px;margin-top:6px">
+      <span><span class="badge b-train">Train</span> 43,270 支，計算 loss，更新 W</span>
+      <span><span class="badge b-val">Val</span> 5,408 支，監控 val_loss，選最佳 checkpoint</span>
+      <span><span class="badge b-test">Test</span> 5,410 支，最終評估，完全不碰</span>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h">demo 範例各節點角色</div>
+      <table>
+        <tr><th>節點</th><th>split</th><th>參與 Forward Pass</th><th>參與 loss</th><th>鄰居邊存在圖中</th></tr>
+        <tr class="rh-vid"><td><strong>v0</strong></td><td><span class="badge b-train">train</span></td><td>是</td><td>是</td><td>是</td></tr>
+        <tr class="rh-vid"><td><strong>v1</strong></td><td><span class="badge b-train">train</span></td><td>是</td><td>是</td><td>是</td></tr>
+        <tr class="rh-vid"><td><strong>v2</strong></td><td><span class="badge b-val">val</span></td><td>是</td><td>否</td><td>是</td></tr>
+        <tr class="rh-vid"><td><strong>v3</strong></td><td><span class="badge b-test">test</span></td><td>是</td><td>否</td><td>是</td></tr>
+      </table>
+      <div class="info-navy" style="margin-top:12px;font-size:12px;border-radius:var(--r-sm);padding:10px 14px">
+        <strong>為什麼 v2（val）和 v3（test）也要參與 Forward Pass？</strong><br><br>
+        在 Layer 2 計算 v0 的 embedding 時，需要 c0 在 Layer 1 的結果 h_c0_L1。<br>
+        而 h_c0_L1 = ReLU( W_n × <strong>MEAN(h_v0, h_v1, h_v2, h_v3)</strong> + W_s × h_c0 )<br>
+        c0 聚合了全部四個影片，包含 v2 和 v3 的初始特徵。<br><br>
+        因此 v2、v3 雖然不進入 loss，其特徵仍透過共用鄰居（c0）影響 v0/v1 的最終 embedding。
+      </div>
+      <div class="fbox" style="margin-top:10px;font-size:12px">
+        Forward Pass 全圖（4 個影片都算）：<br>
+        pred_v0 = 0.634,  pred_v1 = 0.600  ← train_mask = True，進入 loss<br>
+        pred_v2 = ?,  pred_v3 = ?          ← train_mask = False，不進入 loss<br><br>
+        loss = (0.634 - 0.600)^2 + (0.600 - 0.700)^2 = 0.01116<br>
+        loss.backward()  →  只對 v0, v1 的預測誤差求梯度  →  更新所有 W
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">Author 特徵的 leakage 防護</div>
+      <div class="info-warn" style="margin-bottom:10px">
+        Author 特徵的 8 個 label 均值，只用 train 影片的真實標籤計算。<br>
+        若用了 val / test 的 label，等同提前看到答案（leakage）。
+      </div>
+      <div class="fbox" style="font-size:12px">
+        author_feat[a0] = [<br>
+        &nbsp;&nbsp;log_fans,           ← 所有影片都能用<br>
+        &nbsp;&nbsp;train_video_count,  ← 只數 train 影片<br>
+        &nbsp;&nbsp;mean(like_rate),    ← 只用 train 影片的標籤<br>
+        &nbsp;&nbsp;... 共 10 維<br>
+        ]
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-h">Transductive Learning — 測試節點在圖中，但不是 leakage</div>
+    <div class="info-navy">
+      <strong>什麼是 Transductive Learning？</strong><br>
+      模型訓練時看到的是一張<em>固定的完整圖</em>——所有節點（包含 val、test）都在圖中。
+      它們的特徵（features X）對訊息傳遞可見，但它們的標籤（labels Y）從不進入 loss。<br>
+      這是 GCN / GraphSAGE 的標準半監督做法，也稱為「transductive node classification」。
+    </div>
+    <div class="info-grn" style="margin-top:4px">
+      <strong>為什麼不算 leakage？</strong><br>
+      Leakage 的定義：把「測試時才會知道的資訊」偷偷帶進訓練。<br>
+      v3 的特徵 X（封面向量、描述文字等）在影片上架第一天就存在，並非未來資訊。<br>
+      v3 的標籤 Y（實際 like_rate、watch_time）才是未來才有的資訊——這些從未進入 loss。<br>
+      結論：<strong>X 可見 ≠ leakage；Y 進 loss 才是 leakage。</strong>
+    </div>
+    <div class="info-warn" style="margin-top:4px">
+      <strong>與 Inductive Learning 的差異，以及 Cold Start</strong><br>
+      <strong>Transductive（本 demo）</strong>：圖結構訓練時固定，推論只在已知節點上進行。<br>
+      <strong>Inductive（GraphSAGE 原始設計）</strong>：支援訓練結束後加入全新節點，模型對未見結構做推論。<br><br>
+      若要對<em>全新影片</em>做 Inductive 推論，需同時具備：<br>
+      ① 既有作者（author embedding 已在訓練圖中）<br>
+      ② 既有類別（category embedding 已在訓練圖中）<br>
+      ③ 至少 1 個 kNN 鄰居（cosine 相似的既有影片，提供 similar_to 訊息）<br><br>
+      若作者是全新的（無任何 train 標籤均值），10 維 author 特徵中的 label-mean 欄位將缺失——這才是真正的 <strong>Cold Start</strong> 問題。
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 4 — LAYER 1
+════════════════════════════════════════════ -->
+<div id="tab-l1" class="tab">
+  <div class="page-h">Layer 1 — SAGEConv</div>
+  <div class="page-sub">每個節點向直接鄰居收集訊息，更新自身 embedding</div>
+
+  <div class="fbox" style="margin-bottom:14px">
+    h_vi_new = ReLU(<br>
+    &nbsp;&nbsp;out_sim  +  out_aut  +  out_cat<br>
+    )<br><br>
+    其中 out_X = W_n × MEAN( h_u : u 是透過邊 X 連到 vi 的鄰居 )  +  W_s × h_vi<br>
+    W_n = 0.3，W_s = 0.5（每種邊各有獨立的 W_n, W_s，此處簡化共用）
+  </div>
+
+  <div class="step-ctrl">
+    <button id="btn-l1-prev" class="btn btn-outline" onclick="l1Prev()" disabled>上一步</button>
+    <button id="btn-l1-next" class="btn btn-navy" onclick="l1Next()">下一步</button>
+    <button class="btn btn-outline" onclick="l1Reset()">重置</button>
+    <span class="step-info" id="l1-info">步驟 0 / 7 — 按「下一步」開始</span>
+  </div>
+
+  <div class="g2">
+    <!-- LEFT: computation detail -->
+    <div>
+      <div id="l1-cbox" class="cbox">
+        <div class="cbox-h" id="l1-cbox-h">—</div>
+        <!-- header row -->
+        <div class="cline" style="font-weight:700;font-size:11px;color:var(--muted);background:none">
+          <span>邊種類</span>
+          <span>MEAN(鄰居) → W_n × MEAN + W_s × h_self</span>
+          <span>輸出</span>
+        </div>
+        <div id="l1-row-sim" class="cline cline-sim" style="display:none">
+          <span class="cedge" style="color:#164e63">similar_to</span>
+          <span id="l1-sim-formula" class="mono"></span>
+          <span id="l1-sim-out" class="num"></span>
+        </div>
+        <div id="l1-row-aut" class="cline cline-aut" style="display:none">
+          <span class="cedge" style="color:var(--pk3)">posted_by</span>
+          <span id="l1-aut-formula" class="mono"></span>
+          <span id="l1-aut-out" class="num"></span>
+        </div>
+        <div id="l1-row-cat" class="cline cline-cat" style="display:none">
+          <span class="cedge" style="color:#5b21b6">belongs_to</span>
+          <span id="l1-cat-formula" class="mono"></span>
+          <span id="l1-cat-out" class="num"></span>
+        </div>
+        <div id="l1-row-sum" class="cline cline-sum" style="display:none">
+          <span id="l1-sum-calc" class="mono" style="grid-column:1/3;white-space:nowrap"></span>
+          <span id="l1-sum-out" class="cresult"></span>
+        </div>
+      </div>
+
+      <!-- Results table (builds up) -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-h">Layer 1 結果（逐步累積）</div>
+        <table>
+          <tr><th>節點</th><th>h 初始</th><th>h after L1</th></tr>
+          <tr id="res-v0" style="display:none" class="rh-vid"><td><strong>v0</strong></td><td>3.0</td><td class="num" style="color:#059669">6.00</td></tr>
+          <tr id="res-v1" style="display:none" class="rh-vid"><td><strong>v1</strong></td><td>1.0</td><td class="num" style="color:#059669">3.60</td></tr>
+          <tr id="res-v2" style="display:none" class="rh-vid"><td><strong>v2</strong></td><td>2.0</td><td class="num" style="color:#059669">4.20</td></tr>
+          <tr id="res-v3" style="display:none" class="rh-vid"><td><strong>v3</strong></td><td>1.0</td><td class="num" style="color:#059669">3.00</td></tr>
+          <tr id="res-a0" style="display:none" class="rh-aut"><td><strong>a0</strong></td><td>2.0</td><td class="num" style="color:#059669">1.60</td></tr>
+          <tr id="res-a1" style="display:none" class="rh-aut"><td><strong>a1</strong></td><td>1.0</td><td class="num" style="color:#059669">0.95</td></tr>
+          <tr id="res-c0" style="display:none" class="rh-cat"><td><strong>c0</strong></td><td>2.0</td><td class="num" style="color:#059669">1.525</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT: graph -->
+    <div class="card graph-wrap" style="padding:14px">
+      <div class="card-h" id="l1-graph-h">等待計算</div>
+      <svg viewBox="0 0 540 390" width="100%">
+        <line x1="145" y1="95" x2="85" y2="190" stroke="var(--pk2)" stroke-width="1.8" stroke-dasharray="4,3" opacity=".6"/>
+        <line x1="145" y1="95" x2="218" y2="190" stroke="var(--pk2)" stroke-width="1.8" stroke-dasharray="4,3" opacity=".6"/>
+        <line x1="395" y1="95" x2="325" y2="190" stroke="var(--pk2)" stroke-width="1.8" stroke-dasharray="4,3" opacity=".6"/>
+        <line x1="395" y1="95" x2="465" y2="190" stroke="var(--pk2)" stroke-width="1.8" stroke-dasharray="4,3" opacity=".6"/>
+        <line x1="85" y1="205" x2="218" y2="205" stroke="var(--nv0)" stroke-width="2.8"/>
+        <line x1="325" y1="205" x2="465" y2="205" stroke="var(--nv0)" stroke-width="2.8"/>
+        <line x1="272" y1="334" x2="85" y2="215" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3,3" opacity=".5"/>
+        <line x1="272" y1="334" x2="218" y2="215" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3,3" opacity=".5"/>
+        <line x1="272" y1="334" x2="325" y2="215" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3,3" opacity=".5"/>
+        <line x1="272" y1="334" x2="465" y2="215" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3,3" opacity=".5"/>
+        <!-- author nodes -->
+        <circle cx="145" cy="82" r="24" fill="var(--pk0)" stroke="var(--pk2)" stroke-width="2.2" id="ga0"/>
+        <text x="145" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="var(--pk3)">a0</text>
+        <text x="145" y="85" text-anchor="middle" font-size="10" fill="var(--muted)" id="ga0h-old" text-decoration="line-through" visibility="hidden">h=2</text>
+        <text x="145" y="96" text-anchor="middle" font-size="11" fill="var(--pk3)" id="ga0h">h=2</text>
+        <circle cx="395" cy="82" r="24" fill="var(--pk0)" stroke="var(--pk2)" stroke-width="2.2" id="ga1"/>
+        <text x="395" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="var(--pk3)">a1</text>
+        <text x="395" y="85" text-anchor="middle" font-size="10" fill="var(--muted)" id="ga1h-old" text-decoration="line-through" visibility="hidden">h=1</text>
+        <text x="395" y="96" text-anchor="middle" font-size="11" fill="var(--pk3)" id="ga1h">h=1</text>
+        <!-- video nodes -->
+        <circle cx="85" cy="205" r="26" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5" id="gv0"/>
+        <text x="85" y="198" text-anchor="middle" font-size="12" font-weight="700" fill="var(--nv0)">v0</text>
+        <text x="85" y="208" text-anchor="middle" font-size="10" fill="var(--muted)" id="gv0h-old" text-decoration="line-through" visibility="hidden">h=3</text>
+        <text x="85" y="220" text-anchor="middle" font-size="11" fill="var(--nv0)" id="gv0h">h=3</text>
+        <circle cx="218" cy="205" r="26" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5" id="gv1"/>
+        <text x="218" y="198" text-anchor="middle" font-size="12" font-weight="700" fill="var(--nv0)">v1</text>
+        <text x="218" y="208" text-anchor="middle" font-size="10" fill="var(--muted)" id="gv1h-old" text-decoration="line-through" visibility="hidden">h=1</text>
+        <text x="218" y="220" text-anchor="middle" font-size="11" fill="var(--nv0)" id="gv1h">h=1</text>
+        <circle cx="325" cy="205" r="26" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5" id="gv2"/>
+        <text x="325" y="198" text-anchor="middle" font-size="12" font-weight="700" fill="var(--nv0)">v2</text>
+        <text x="325" y="208" text-anchor="middle" font-size="10" fill="var(--muted)" id="gv2h-old" text-decoration="line-through" visibility="hidden">h=2</text>
+        <text x="325" y="220" text-anchor="middle" font-size="11" fill="var(--nv0)" id="gv2h">h=2</text>
+        <circle cx="465" cy="205" r="26" fill="var(--nv3)" stroke="var(--nv0)" stroke-width="2.5" id="gv3"/>
+        <text x="465" y="198" text-anchor="middle" font-size="12" font-weight="700" fill="var(--nv0)">v3</text>
+        <text x="465" y="208" text-anchor="middle" font-size="10" fill="var(--muted)" id="gv3h-old" text-decoration="line-through" visibility="hidden">h=1</text>
+        <text x="465" y="220" text-anchor="middle" font-size="11" fill="var(--nv0)" id="gv3h">h=1</text>
+        <!-- category -->
+        <circle cx="272" cy="346" r="26" fill="#ede9fe" stroke="#7c3aed" stroke-width="2.2"/>
+        <text x="272" y="339" text-anchor="middle" font-size="12" font-weight="700" fill="#5b21b6">c0</text>
+        <text x="272" y="349" text-anchor="middle" font-size="10" fill="var(--muted)" id="gc0h-old" text-decoration="line-through" visibility="hidden">h=2</text>
+        <text x="272" y="360" text-anchor="middle" font-size="11" fill="#5b21b6" id="gc0h">h=2</text>
+        <!-- labels -->
+        <text x="85" y="238" text-anchor="middle" font-size="10" fill="var(--nv0)" font-weight="700">train</text>
+        <text x="218" y="238" text-anchor="middle" font-size="10" fill="var(--nv0)" font-weight="700">train</text>
+        <text x="325" y="238" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="700">val</text>
+        <text x="465" y="238" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="700">test</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 5 — LAYER 2
+════════════════════════════════════════════ -->
+<div id="tab-l2" class="tab">
+  <div class="page-h">Layer 2 — SAGEConv</div>
+  <div class="page-sub">輸入換成 Layer 1 的結果，讓每個節點看到二跳鄰居的資訊</div>
+
+  <div class="fbox" style="margin-bottom:14px">
+    Layer 2 公式與 Layer 1 完全相同，只是所有 h 換成 Layer 1 的輸出：<br>
+    h_v0_L1=6.0, h_v1_L1=3.6, h_v2_L1=4.2, h_v3_L1=3.0<br>
+    h_a0_L1=1.6, h_a1_L1=0.95, h_c0_L1=1.525
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-h">v0 的 Layer 2 完整計算（以 L1 值代入）</div>
+    <table>
+      <tr><th>邊種類</th><th>鄰居</th><th>鄰居 L1 值</th><th>W_n × h_neigh</th><th>W_s × h_v0_L1</th><th>出（out）</th></tr>
+      <tr class="rh-sim">
+        <td><span class="badge b-sim">similar_to</span></td>
+        <td>v1</td>
+        <td class="num">3.60</td>
+        <td class="mono">0.3 × 3.60 = 1.08</td>
+        <td class="mono">0.5 × 6.00 = 3.00</td>
+        <td class="num">4.08</td>
+      </tr>
+      <tr class="rh-aut">
+        <td><span class="badge b-aut">posted_by</span></td>
+        <td>a0</td>
+        <td class="num">1.60</td>
+        <td class="mono">0.3 × 1.60 = 0.48</td>
+        <td class="mono">0.5 × 6.00 = 3.00</td>
+        <td class="num">3.48</td>
+      </tr>
+      <tr class="rh-cat">
+        <td><span class="badge b-cat">belongs_to</span></td>
+        <td>c0</td>
+        <td class="num">1.525</td>
+        <td class="mono">0.3 × 1.525 = 0.458</td>
+        <td class="mono">0.5 × 6.00 = 3.00</td>
+        <td class="num">3.458</td>
+      </tr>
+      <tr class="rh-sum">
+        <td colspan="5">sum = 4.08 + 3.48 + 3.458 &nbsp; → &nbsp; ReLU = h_v0_L2</td>
+        <td class="num" style="color:#059669">11.02</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h">所有 video 節點的 Layer 2 結果</div>
+      <table>
+        <tr><th>節點</th><th>h_L1</th><th>鄰居 L1 值</th><th>h_L2</th></tr>
+        <tr class="rh-vid">
+          <td><strong>v0</strong> <span class="badge b-train">train</span></td>
+          <td class="num">6.00</td>
+          <td class="mono" style="font-size:11px">v1=3.6, a0=1.6, c0=1.525</td>
+          <td class="num" style="color:#059669">11.02</td>
+        </tr>
+        <tr class="rh-vid">
+          <td><strong>v1</strong> <span class="badge b-train">train</span></td>
+          <td class="num">3.60</td>
+          <td class="mono" style="font-size:11px">v0=6.0, a0=1.6, c0=1.525</td>
+          <td class="num" style="color:#059669">8.14</td>
+        </tr>
+        <tr class="rh-vid">
+          <td><strong>v3</strong> <span class="badge b-test">test</span></td>
+          <td class="num">3.00</td>
+          <td class="mono" style="font-size:11px">v2=4.2, a1=0.95, c0=1.525</td>
+          <td class="num" style="color:#059669">6.50</td>
+        </tr>
+      </table>
+      <div class="info-pink" style="margin-top:10px;font-size:12px">
+        v3 雖然是 test，Layer 2 也照常計算，因為它在圖中有邊。<br>
+        v3 的 h_L2=6.50 後續會進入 MLP 得到預測值。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">Readout MLP（只取 video 節點）</div>
+      <div class="fbox" style="margin-bottom:10px">
+        out   = Linear(128→64) → ReLU → Linear(64→8)<br>
+        rates = sigmoid( out[:, :7] )   — 7 個 rate<br>
+        wt    = out[:, 7]               — log(watch_time)
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">demo 設定：只預測 like_rate，W_mlp=0.05</p>
+      <table>
+        <tr><th>節點</th><th>h_L2</th><th>x = h × W_mlp</th><th>sigmoid(x) = 1/(1+e^-x)</th><th>pred_rate</th></tr>
+        <tr class="rh-vid">
+          <td><strong>v0</strong></td><td>11.02</td>
+          <td class="mono">11.02 × 0.05 = 0.551</td>
+          <td class="mono" style="font-size:11px">1 / (1 + e^-0.551) = 1 / 1.576</td>
+          <td class="num">0.634</td>
+        </tr>
+        <tr class="rh-vid">
+          <td><strong>v1</strong></td><td>8.14</td>
+          <td class="mono">8.14 × 0.05 = 0.407</td>
+          <td class="mono" style="font-size:11px">1 / (1 + e^-0.407) = 1 / 1.666</td>
+          <td class="num">0.600</td>
+        </tr>
+        <tr class="rh-vid">
+          <td><strong>v3</strong></td><td>6.50</td>
+          <td class="mono">6.50 × 0.05 = 0.325</td>
+          <td class="mono" style="font-size:11px">1 / (1 + e^-0.325) = 1 / 1.722</td>
+          <td class="num">0.581</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 6 — LOSS & TEST
+════════════════════════════════════════════ -->
+<div id="tab-loss" class="tab">
+  <div class="page-h">Loss 計算與測試</div>
+  <div class="page-sub">只有 train 節點的預測值進入 loss；test 節點直接讀出預測</div>
+
+  <div class="g2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-h">Loss 計算（只算 v0 與 v1）</div>
+      <div class="fbox" style="margin-bottom:10px">
+        loss = sum( w_i × (pred_i - true_i)^2 )<br>
+        demo 中 w_i = 1.0（等權重）
+      </div>
+      <table>
+        <tr><th>節點</th><th>pred_rate</th><th>true_rate</th><th>差值</th><th>(差)^2</th></tr>
+        <tr class="rh-vid">
+          <td><strong>v0</strong></td>
+          <td class="num">0.634</td><td class="num">0.600</td>
+          <td class="num" style="color:var(--pk3)">+0.034</td>
+          <td class="num">0.00116</td>
+        </tr>
+        <tr class="rh-vid">
+          <td><strong>v1</strong></td>
+          <td class="num">0.600</td><td class="num">0.700</td>
+          <td class="num" style="color:var(--pk3)">-0.100</td>
+          <td class="num">0.01000</td>
+        </tr>
+        <tr class="rh-sum">
+          <td colspan="4">total_loss</td>
+          <td class="num" style="color:var(--pk3)">0.01116</td>
+        </tr>
+      </table>
+      <div class="fbox-pink fbox" style="margin-top:10px">
+        梯度（以 W_mlp 為例，對 v1）：<br>
+        grad = 2 × (0.600 - 0.700) × 8.14 = -1.628<br>
+        W_mlp_new = 0.05 - lr × (-1.628)  → W 增大，讓預測往 0.7 靠近
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">一個 Epoch 的完整流程</div>
+      <table>
+        <tr><th>步驟</th><th>程式碼對應</th><th>說明</th></tr>
+        <tr><td>1</td><td class="mono" style="font-size:11px">model.train()</td><td>啟用 Dropout</td></tr>
+        <tr><td>2</td><td class="mono" style="font-size:11px">out = model(x_dict, edge_index_dict)</td><td>全部節點 Forward Pass</td></tr>
+        <tr><td>3</td><td class="mono" style="font-size:11px">loss = weighted_loss(out[train_mask], ...)</td><td>只算 train 節點的 loss</td></tr>
+        <tr><td>4</td><td class="mono" style="font-size:11px">loss.backward()</td><td>自動計算所有 W 的梯度</td></tr>
+        <tr><td>5</td><td class="mono" style="font-size:11px">clip_grad_norm_(1.0)</td><td>防止梯度爆炸</td></tr>
+        <tr><td>6</td><td class="mono" style="font-size:11px">optimizer.step()</td><td>AdamW 更新所有 W</td></tr>
+        <tr><td>7</td><td class="mono" style="font-size:11px">model.eval(); val_loss = ...</td><td>算 val_loss，決定是否存 checkpoint</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-h">測試階段（載入 best_model.pt 後）</div>
+    <div class="fbox fbox-grn" style="margin-bottom:12px">
+      model.eval()<br>
+      with torch.no_grad():<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;out = model(data.x_dict, data.edge_index_dict)  — 全部節點一起跑<br>
+      pred_test = out[test_mask]  — 取出 test 節點的預測值
+    </div>
+    <table>
+      <tr><th>節點</th><th>split</th><th>pred_like_rate</th><th>說明</th></tr>
+      <tr class="rh-vid"><td>v0</td><td><span class="badge b-train">train</span></td><td class="num">0.634</td><td>有真實標籤，用於訓練</td></tr>
+      <tr class="rh-vid"><td>v1</td><td><span class="badge b-train">train</span></td><td class="num">0.600</td><td>有真實標籤，用於訓練</td></tr>
+      <tr class="rh-vid"><td>v2</td><td><span class="badge b-val">val</span></td><td class="num">—</td><td>用來選最佳 checkpoint</td></tr>
+      <tr class="rh-result"><td><strong>v3</strong></td><td><span class="badge b-test">test</span></td>
+        <td class="num" style="font-size:18px;color:var(--nv0)">0.581</td>
+        <td>最終預測結果；v3 透過 v2 的邊在 Layer 1/2 收到了資訊</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-h">v3 從輸入到輸出的完整數值追蹤</div>
+    <div class="flow">
+      <div class="flow-node" style="border-color:var(--nv0)">
+        <div style="font-size:11px;color:var(--muted)">初始</div>
+        <div>h_v3 = 1.0</div>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node" style="border-color:#059669">
+        <div style="font-size:11px;color:var(--muted)">Layer 1</div>
+        <div>h_v3_L1 = 3.00</div>
+        <div style="font-size:10px;color:var(--muted)">收到 v2, a1, c0</div>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node" style="border-color:#059669">
+        <div style="font-size:11px;color:var(--muted)">Layer 2</div>
+        <div>h_v3_L2 = 6.50</div>
+        <div style="font-size:10px;color:var(--muted)">收到 v2_L1, a1_L1</div>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node" style="border-color:var(--pk2)">
+        <div style="font-size:11px;color:var(--muted)">MLP</div>
+        <div>6.50 × 0.05</div>
+        <div>= 0.325</div>
+      </div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node" style="border-color:var(--pk2)">
+        <div style="font-size:11px;color:var(--muted)">sigmoid</div>
+        <div style="font-size:18px;font-weight:800;color:var(--nv0)">0.581</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tab navigation ──────────────────────────────────────────
+function go(id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Layer 1 step-through ────────────────────────────────────
+const L1_DATA = [
+  null,
+  {
+    node:'v0', role:'train',
+    sim:{nb:'h_v1=1.0', calc:'0.3×1.0 + 0.5×3.0', out:'1.80'},
+    aut:{nb:'h_a0=2.0', calc:'0.3×2.0 + 0.5×3.0', out:'2.10'},
+    cat:{nb:'h_c0=2.0', calc:'0.3×2.0 + 0.5×3.0', out:'2.10'},
+    sum:'ReLU(1.80+2.10+2.10) = max(0, 6.00)',
+    result:'6.00', hLabel:'gv0h', hNew:'6.00', initH:'h=3', origFill:'var(--nv0)'
+  },
+  {
+    node:'v1', role:'train',
+    sim:{nb:'h_v0=3.0', calc:'0.3×3.0 + 0.5×1.0', out:'1.40'},
+    aut:{nb:'h_a0=2.0', calc:'0.3×2.0 + 0.5×1.0', out:'1.10'},
+    cat:{nb:'h_c0=2.0', calc:'0.3×2.0 + 0.5×1.0', out:'1.10'},
+    sum:'ReLU(1.40+1.10+1.10) = max(0, 3.60)',
+    result:'3.60', hLabel:'gv1h', hNew:'3.60', initH:'h=1', origFill:'var(--nv0)'
+  },
+  {
+    node:'v2', role:'val',
+    sim:{nb:'h_v3=1.0', calc:'0.3×1.0 + 0.5×2.0', out:'1.30'},
+    aut:{nb:'h_a1=1.0', calc:'0.3×1.0 + 0.5×2.0', out:'1.30'},
+    cat:{nb:'h_c0=2.0', calc:'0.3×2.0 + 0.5×2.0', out:'1.60'},
+    sum:'ReLU(1.30+1.30+1.60) = max(0, 4.20)',
+    result:'4.20', hLabel:'gv2h', hNew:'4.20', initH:'h=2', origFill:'var(--nv0)'
+  },
+  {
+    node:'v3', role:'test',
+    sim:{nb:'h_v2=2.0', calc:'0.3×2.0 + 0.5×1.0', out:'1.10'},
+    aut:{nb:'h_a1=1.0', calc:'0.3×1.0 + 0.5×1.0', out:'0.80'},
+    cat:{nb:'h_c0=2.0', calc:'0.3×2.0 + 0.5×1.0', out:'1.10'},
+    sum:'ReLU(1.10+0.80+1.10) = max(0, 3.00)',
+    result:'3.00', hLabel:'gv3h', hNew:'3.00', initH:'h=1', origFill:'var(--nv0)'
+  },
+  {
+    node:'a0', role:'author',
+    sim:{nb:'MEAN(v0=3, v1=1)=2.0', calc:'0.3×2.0 + 0.5×2.0', out:'1.60'},
+    aut:null, cat:null,
+    sum:'ReLU(1.60) = max(0, 1.60)',
+    result:'1.60', hLabel:'ga0h', hNew:'1.60', initH:'h=2', origFill:'var(--pk3)'
+  },
+  {
+    node:'a1', role:'author',
+    sim:{nb:'MEAN(v2=2, v3=1)=1.5', calc:'0.3×1.5 + 0.5×1.0', out:'0.95'},
+    aut:null, cat:null,
+    sum:'ReLU(0.95) = max(0, 0.95)',
+    result:'0.95', hLabel:'ga1h', hNew:'0.95', initH:'h=1', origFill:'var(--pk3)'
+  },
+  {
+    node:'c0', role:'category',
+    sim:{nb:'MEAN(v0=3,v1=1,v2=2,v3=1)=1.75', calc:'0.3×1.75 + 0.5×2.0', out:'1.525'},
+    aut:null, cat:null,
+    sum:'ReLU(1.525) = max(0, 1.525)',
+    result:'1.525', hLabel:'gc0h', hNew:'1.525', initH:'h=2', origFill:'#5b21b6'
+  }
+];
+
+let l1Idx = 0;
+const TOTAL = L1_DATA.length - 1;
+
+function l1Show(idx){
+  const d = L1_DATA[idx];
+  document.getElementById('l1-cbox').classList.add('show');
+  document.getElementById('l1-cbox-h').textContent = '計算節點：' + d.node + '  (' + d.role + ')';
+  document.getElementById('l1-graph-h').textContent = '正在計算 ' + d.node;
+
+  const rowSim = document.getElementById('l1-row-sim');
+  if(d.sim){
+    rowSim.style.display='';
+    document.getElementById('l1-sim-formula').textContent = d.sim.nb + '  →  ' + d.sim.calc;
+    document.getElementById('l1-sim-out').textContent = d.sim.out;
+  } else rowSim.style.display='none';
+
+  const rowAut = document.getElementById('l1-row-aut');
+  const rowCat = document.getElementById('l1-row-cat');
+  if(d.aut){ rowAut.style.display=''; document.getElementById('l1-aut-formula').textContent=d.aut.nb+'  →  '+d.aut.calc; document.getElementById('l1-aut-out').textContent=d.aut.out; } else rowAut.style.display='none';
+  if(d.cat){ rowCat.style.display=''; document.getElementById('l1-cat-formula').textContent=d.cat.nb+'  →  '+d.cat.calc; document.getElementById('l1-cat-out').textContent=d.cat.out; } else rowCat.style.display='none';
+
+  document.getElementById('l1-row-sum').style.display='';
+  document.getElementById('l1-sum-calc').textContent = d.sum + ' =';
+  document.getElementById('l1-sum-out').textContent = d.result;
+
+  if(d.hLabel){
+    const el    = document.getElementById(d.hLabel);
+    const elOld = document.getElementById(d.hLabel+'-old');
+    if(elOld){ elOld.textContent = d.initH; elOld.setAttribute('visibility','visible'); }
+    if(el){ el.textContent='h='+d.hNew; el.setAttribute('fill','#059669'); }
+  }
+}
+
+function l1UpdateButtons(){
+  document.getElementById('btn-l1-prev').disabled = (l1Idx <= 0);
+  document.getElementById('btn-l1-next').disabled = (l1Idx >= TOTAL);
+  document.getElementById('l1-info').textContent =
+    '步驟 ' + l1Idx + ' / ' + TOTAL +
+    (l1Idx === TOTAL ? ' — Layer 1 完成' : '');
+}
+
+function l1Next(){
+  if(l1Idx >= TOTAL) return;
+  l1Idx++;
+  l1Show(l1Idx);
+  const res = document.getElementById('res-' + L1_DATA[l1Idx].node);
+  if(res) res.style.display='';
+  l1UpdateButtons();
+}
+
+function l1Prev(){
+  if(l1Idx <= 0) return;
+  // Undo current step
+  const d = L1_DATA[l1Idx];
+  const res = document.getElementById('res-' + d.node);
+  if(res) res.style.display='none';
+  if(d.hLabel){
+    const el    = document.getElementById(d.hLabel);
+    const elOld = document.getElementById(d.hLabel+'-old');
+    if(elOld) elOld.setAttribute('visibility','hidden');
+    if(el){ el.textContent=d.initH; el.setAttribute('fill',d.origFill); }
+  }
+  l1Idx--;
+  if(l1Idx === 0){
+    document.getElementById('l1-cbox').classList.remove('show');
+    document.getElementById('l1-graph-h').textContent = '等待計算';
+  } else {
+    l1Show(l1Idx);
+  }
+  l1UpdateButtons();
+}
+
+function l1Reset(){
+  for(let i=1; i<L1_DATA.length; i++){
+    const d = L1_DATA[i];
+    const res = document.getElementById('res-' + d.node);
+    if(res) res.style.display='none';
+    if(d.hLabel){
+      const el    = document.getElementById(d.hLabel);
+      const elOld = document.getElementById(d.hLabel+'-old');
+      if(elOld) elOld.setAttribute('visibility','hidden');
+      if(el){ el.textContent=d.initH; el.setAttribute('fill',d.origFill); }
+    }
+  }
+  l1Idx = 0;
+  document.getElementById('l1-cbox').classList.remove('show');
+  document.getElementById('l1-graph-h').textContent = '等待計算';
+  l1UpdateButtons();
+}
+</script>
+</body>
+</html>
